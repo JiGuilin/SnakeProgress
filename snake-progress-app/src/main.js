@@ -155,7 +155,7 @@ function getDefaultConfig() {
       colorMode: 'solid', rainbowMode: false, pixelSize: 8,
       opacity: 80, margin: 2, snakeLengthMode: 'trailing',
       fixedLengthPercent: 20, animationSpeed: 'normal',
-      showTrail: false, headGlow: true, straightMode: false, headShape: 'triangle',
+      showTrail: false, headGlow: true, straightMode: false, headShape: 'triangle', skinTexture: 'solid',
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -375,6 +375,7 @@ function drawSnakeBody(blocks, pixelSize) {
   const tiny = pixelSize <= 2 || config.appearance.straightMode; // 无摆动
   const snap = tiny;
   const totalBlocks = blocks.length;
+  const texture = config.appearance.skinTexture || 'solid';
   // 尾部渐变缩小的点数
   const tailTaperCount = pixelSize > 2 ? Math.min(6, Math.floor(totalBlocks / 3)) : 0;
   // 头部不抖动的点数
@@ -384,12 +385,10 @@ function drawSnakeBody(blocks, pixelSize) {
 
   for (let bIdx = 0; bIdx < totalBlocks; bIdx++) {
     const block = blocks[bIdx];
-    // 蛇身序号：0=尾部, totalBlocks-1=头部
-    const bodyPos = bIdx; // 0=tail, totalBlocks-1=head
+    const bodyPos = bIdx;
 
     let dx = 0, dy = 0;
     if (!tiny) {
-      // 蛇头和蛇尾不抖动，只有身体中间抖
       const isHeadZone = bodyPos >= totalBlocks - headNoWiggle;
       const isTailZone = bodyPos < tailNoWiggle;
       if (!isHeadZone && !isTailZone) {
@@ -406,22 +405,94 @@ function drawSnakeBody(blocks, pixelSize) {
     let scale = 1;
     if (tailTaperCount > 0 && bodyPos < tailTaperCount) {
       scale = (bodyPos + 1) / tailTaperCount;
-      scale = Math.max(0.3, scale); // 最小缩放30%
+      scale = Math.max(0.3, scale);
     }
 
     if (block.isHead && pixelSize > 2) {
-      // ====== 三角形蛇头 ======
       const headSize = pixelSize + 2;
       drawHead(block, headSize, dx, dy);
     } else {
-      // ====== 方块蛇身/蛇尾 ======
       const scaledSize = Math.max(1, blockSize * scale);
-      ctx.fillStyle = block.isHead ? getHeadColor() : getBlockColor(block);
       const bx = snap ? Math.round(block.x - scaledSize / 2 + dx) : block.x - scaledSize / 2 + dx;
       const by = snap ? Math.round(block.y - scaledSize / 2 + dy) : block.y - scaledSize / 2 + dy;
-      ctx.fillRect(bx, by, scaledSize, scaledSize);
+
+      if (texture === 'solid' || pixelSize <= 3) {
+        // 纯色模式或小像素：直接绘制方块
+        ctx.fillStyle = block.isHead ? getHeadColor() : getBlockColor(block);
+        ctx.fillRect(bx, by, scaledSize, scaledSize);
+      } else if (texture === 'checkerboard') {
+        // 鳞片（棋盘格）：交替亮暗方块
+        drawCheckerboardBlock(bx, by, scaledSize, block, bIdx);
+      } else if (texture === 'stripe') {
+        // 条纹：方块内绘制横/竖条纹
+        drawStripeBlock(bx, by, scaledSize, block);
+      } else if (texture === 'dots') {
+        // 圆点：方块内绘制圆点
+        drawDotsBlock(bx, by, scaledSize, block, bIdx);
+      }
     }
   }
+}
+
+/**
+ * 鳞片纹理（棋盘格）：相邻方块交替亮/暗
+ */
+function drawCheckerboardBlock(bx, by, size, block, bIdx) {
+  const baseColor = block.isHead ? getHeadColor() : getBlockColor(block);
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(bx, by, size, size);
+
+  // 奇数位方块叠加半透明暗色，形成棋盘格效果
+  if (bIdx % 2 === 1) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.fillRect(bx, by, size, size);
+  }
+}
+
+/**
+ * 条纹纹理：方块内绘制与边框平行的浅色条纹
+ */
+function drawStripeBlock(bx, by, size, block) {
+  const baseColor = block.isHead ? getHeadColor() : getBlockColor(block);
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(bx, by, size, size);
+
+  // 条纹方向与蛇身移动方向平行
+  const stripeColor = 'rgba(255, 255, 255, 0.2)';
+  ctx.fillStyle = stripeColor;
+
+  if (block.side === 'top' || block.side === 'bottom') {
+    // 水平蛇身 → 水平条纹
+    const stripeH = Math.max(1, size / 3);
+    ctx.fillRect(bx, by, size, stripeH);
+    ctx.fillRect(bx, by + size - stripeH, size, stripeH);
+  } else {
+    // 垂直蛇身 → 垂直条纹
+    const stripeW = Math.max(1, size / 3);
+    ctx.fillRect(bx, by, stripeW, size);
+    ctx.fillRect(bx + size - stripeW, by, stripeW, size);
+  }
+}
+
+/**
+ * 圆点纹理：方块内绘制中心圆点
+ */
+function drawDotsBlock(bx, by, size, block, bIdx) {
+  const baseColor = block.isHead ? getHeadColor() : getBlockColor(block);
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(bx, by, size, size);
+
+  // 每个方块中心画一个小圆点
+  const dotRadius = Math.max(1, size * 0.25);
+  const cx = bx + size / 2;
+  const cy = by + size / 2;
+
+  // 交替亮/暗圆点增加变化
+  const dotAlpha = bIdx % 2 === 0 ? 0.35 : 0.15;
+  ctx.fillStyle = `rgba(255, 255, 255, ${dotAlpha})`;
+  ctx.beginPath();
+  ctx.arc(cx, cy, dotRadius, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 /**

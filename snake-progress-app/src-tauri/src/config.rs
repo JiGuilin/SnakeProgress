@@ -50,6 +50,7 @@ pub struct Appearance {
     pub head_glow: bool,
     pub straight_mode: bool,
     pub head_shape: String, // triangle, rectangle, square, circle, diamond
+    pub skin_texture: String, // solid, checkerboard, stripe, dots
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -107,6 +108,7 @@ impl Default for AppConfig {
                 head_glow: true,
                 straight_mode: false,
                 head_shape: "triangle".to_string(),
+                skin_texture: "solid".to_string(),
             },
             display: Display {
                 monitor: "primary".to_string(),
