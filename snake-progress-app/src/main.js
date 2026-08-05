@@ -380,12 +380,16 @@ function drawSnakeBody(blocks, pixelSize) {
   const snap = tiny;
   const totalBlocks = blocks.length;
   const texture = config.appearance.skinTexture || 'solid';
-  // 尾部渐变缩小的点数
-  const tailTaperCount = pixelSize > 2 ? Math.min(6, Math.floor(totalBlocks / 3)) : 0;
+  // 尾部渐变缩小的点数：根据像素大小动态调整
+  // 像素越大，蛇尾渐变越长（1px=0, 2px=0, 4px=5, 6px=7, 8px=9, 12px=13, 16px=17...）
+  let tailTaperCount = 0;
+  if (pixelSize > 2) {
+    tailTaperCount = Math.min(Math.max(4, Math.floor(pixelSize * 1.1)), Math.floor(totalBlocks / 3));
+  }
   // 头部不抖动的点数
   const headNoWiggle = pixelSize > 2 ? 2 : 0;
-  // 尾部不抖动的点数
-  const tailNoWiggle = pixelSize > 2 ? Math.min(tailTaperCount, 3) : 0;
+  // 尾部不抖动的点数：跟随渐变长度调整
+  const tailNoWiggle = pixelSize > 2 ? Math.min(Math.ceil(tailTaperCount * 0.5), 5) : 0;
 
   for (let bIdx = 0; bIdx < totalBlocks; bIdx++) {
     const block = blocks[bIdx];
@@ -405,11 +409,12 @@ function drawSnakeBody(blocks, pixelSize) {
       }
     }
 
-    // 尾部渐变缩放
+    // 尾部渐变缩放：像素越大，尾部末端越尖
     let scale = 1;
     if (tailTaperCount > 0 && bodyPos < tailTaperCount) {
       scale = (bodyPos + 1) / tailTaperCount;
-      scale = Math.max(0.3, scale);
+      const minScale = pixelSize > 8 ? 0.15 : pixelSize > 4 ? 0.2 : 0.3;
+      scale = Math.max(minScale, scale);
     }
 
     if (block.isHead && pixelSize > 2) {
