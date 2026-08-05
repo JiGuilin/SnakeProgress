@@ -155,7 +155,7 @@ function getDefaultConfig() {
       colorMode: 'solid', rainbowMode: false, pixelSize: 8,
       opacity: 80, margin: 2, snakeLengthMode: 'trailing',
       fixedLengthPercent: 20, animationSpeed: 'normal',
-      showTrail: false, headGlow: true,
+      showTrail: false, headGlow: true, straightMode: false, headShape: 'triangle',
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -372,40 +372,142 @@ function drawTrail(path, percent, pixelSize) {
 function drawSnakeBody(blocks, pixelSize) {
   const gap = pixelSize >= 4 ? 1 : 0;
   const blockSize = Math.max(1, pixelSize - gap);
-  const tiny = pixelSize <= 2; // 小像素模式：无摆动
-  // 小像素时对齐整数网格，避免亚像素抗锯齿导致线条变粗
+  const tiny = pixelSize <= 2 || config.appearance.straightMode; // 无摆动
   const snap = tiny;
+  const totalBlocks = blocks.length;
+  // 尾部渐变缩小的点数
+  const tailTaperCount = pixelSize > 2 ? Math.min(6, Math.floor(totalBlocks / 3)) : 0;
+  // 头部不抖动的点数
+  const headNoWiggle = pixelSize > 2 ? 2 : 0;
+  // 尾部不抖动的点数
+  const tailNoWiggle = pixelSize > 2 ? Math.min(tailTaperCount, 3) : 0;
 
-  for (const block of blocks) {
+  for (let bIdx = 0; bIdx < totalBlocks; bIdx++) {
+    const block = blocks[bIdx];
+    // 蛇身序号：0=尾部, totalBlocks-1=头部
+    const bodyPos = bIdx; // 0=tail, totalBlocks-1=head
+
     let dx = 0, dy = 0;
     if (!tiny) {
-      const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
-      if (block.side === 'top' || block.side === 'bottom') {
-        dy = wiggle;
-      } else {
-        dx = wiggle;
+      // 蛇头和蛇尾不抖动，只有身体中间抖
+      const isHeadZone = bodyPos >= totalBlocks - headNoWiggle;
+      const isTailZone = bodyPos < tailNoWiggle;
+      if (!isHeadZone && !isTailZone) {
+        const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
+        if (block.side === 'top' || block.side === 'bottom') {
+          dy = wiggle;
+        } else {
+          dx = wiggle;
+        }
       }
     }
 
-    if (block.isHead) {
+    // 尾部渐变缩放
+    let scale = 1;
+    if (tailTaperCount > 0 && bodyPos < tailTaperCount) {
+      scale = (bodyPos + 1) / tailTaperCount;
+      scale = Math.max(0.3, scale); // 最小缩放30%
+    }
+
+    if (block.isHead && pixelSize > 2) {
+      // ====== 三角形蛇头 ======
       const headSize = pixelSize + 2;
-      const halfHead = headSize / 2;
-      ctx.fillStyle = getHeadColor();
-      const headRgb = hexToRgb(config.appearance.headColor);
-      ctx.shadowColor = `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0.8)`;
-      ctx.shadowBlur = 6;
-      const hx = snap ? Math.round(block.x - halfHead + dx) : block.x - halfHead + dx;
-      const hy = snap ? Math.round(block.y - halfHead + dy) : block.y - halfHead + dy;
-      ctx.fillRect(hx, hy, headSize, headSize);
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
+      drawHead(block, headSize, dx, dy);
     } else {
-      ctx.fillStyle = getBlockColor(block);
-      const bx = snap ? Math.round(block.x - blockSize / 2 + dx) : block.x - blockSize / 2 + dx;
-      const by = snap ? Math.round(block.y - blockSize / 2 + dy) : block.y - blockSize / 2 + dy;
-      ctx.fillRect(bx, by, blockSize, blockSize);
+      // ====== 方块蛇身/蛇尾 ======
+      const scaledSize = Math.max(1, blockSize * scale);
+      ctx.fillStyle = block.isHead ? getHeadColor() : getBlockColor(block);
+      const bx = snap ? Math.round(block.x - scaledSize / 2 + dx) : block.x - scaledSize / 2 + dx;
+      const by = snap ? Math.round(block.y - scaledSize / 2 + dy) : block.y - scaledSize / 2 + dy;
+      ctx.fillRect(bx, by, scaledSize, scaledSize);
     }
   }
+}
+
+/**
+ * 绘制蛇头，支持多种形状：triangle, rectangle, square, circle, diamond
+ */
+function drawHead(headBlock, headSize, dx, dy) {
+  ctx.fillStyle = getHeadColor();
+  const headRgb = hexToRgb(config.appearance.headColor);
+  ctx.shadowColor = `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0.8)`;
+  ctx.shadowBlur = 6;
+
+  const cx = headBlock.x + dx;
+  const cy = headBlock.y + dy;
+  const half = headSize / 2;
+  const shape = config.appearance.headShape || 'triangle';
+
+  // 根据边框位置确定前进方向
+  // top→右, right→下, bottom→左, left→上
+  const side = headBlock.side;
+
+  if (shape === 'triangle') {
+    let p1x, p1y, p2x, p2y, p3x, p3y;
+    if (side === 'top') {
+      p1x = cx + half; p1y = cy; p2x = cx - half; p2y = cy - half; p3x = cx - half; p3y = cy + half;
+    } else if (side === 'right') {
+      p1x = cx; p1y = cy + half; p2x = cx - half; p2y = cy - half; p3x = cx + half; p3y = cy - half;
+    } else if (side === 'bottom') {
+      p1x = cx - half; p1y = cy; p2x = cx + half; p2y = cy - half; p3x = cx + half; p3y = cy + half;
+    } else {
+      p1x = cx; p1y = cy - half; p2x = cx - half; p2y = cy + half; p3x = cx + half; p3y = cy + half;
+    }
+    ctx.beginPath();
+    ctx.moveTo(p1x, p1y);
+    ctx.lineTo(p2x, p2y);
+    ctx.lineTo(p3x, p3y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else if (shape === 'rectangle') {
+    // 长方形：前进方向拉伸1.5倍
+    const longSide = headSize * 1.5;
+    const shortSide = headSize;
+    const halfLong = longSide / 2;
+    const halfShort = shortSide / 2;
+    if (side === 'top' || side === 'bottom') {
+      ctx.fillRect(cx - halfLong, cy - halfShort, longSide, shortSide);
+    } else {
+      ctx.fillRect(cx - halfShort, cy - halfLong, shortSide, longSide);
+    }
+
+  } else if (shape === 'square') {
+    ctx.fillRect(cx - half, cy - half, headSize, headSize);
+
+  } else if (shape === 'circle') {
+    ctx.beginPath();
+    ctx.arc(cx, cy, half, 0, Math.PI * 2);
+    ctx.fill();
+
+  } else if (shape === 'diamond') {
+    // 菱形：前进方向拉长
+    const longHalf = half * 1.3;
+    let top, right, bottom, left;
+    if (side === 'top') {
+      top = { x: cx + longHalf, y: cy }; right = { x: cx, y: cy - half };
+      bottom = { x: cx - longHalf, y: cy }; left = { x: cx, y: cy + half };
+    } else if (side === 'right') {
+      top = { x: cx, y: cy + longHalf }; right = { x: cx - half, y: cy };
+      bottom = { x: cx, y: cy - longHalf }; left = { x: cx + half, y: cy };
+    } else if (side === 'bottom') {
+      top = { x: cx - longHalf, y: cy }; right = { x: cx, y: cy - half };
+      bottom = { x: cx + longHalf, y: cy }; left = { x: cx, y: cy + half };
+    } else {
+      top = { x: cx, y: cy - longHalf }; right = { x: cx - half, y: cy };
+      bottom = { x: cx, y: cy + longHalf }; left = { x: cx + half, y: cy };
+    }
+    ctx.beginPath();
+    ctx.moveTo(top.x, top.y);
+    ctx.lineTo(right.x, right.y);
+    ctx.lineTo(bottom.x, bottom.y);
+    ctx.lineTo(left.x, left.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
 }
 
 function drawHeadGlow(headBlock, pixelSize, timestamp) {

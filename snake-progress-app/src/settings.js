@@ -36,6 +36,8 @@ const els = {
   animationSpeed: $('animationSpeed'),
   showTrail: $('showTrail'),
   headGlow: $('headGlow'),
+  straightMode: $('straightMode'),
+  headShape: $('headShape'),
   autoHideFullscreen: $('autoHideFullscreen'),
   clickThrough: $('clickThrough'),
   autoStart: $('autoStart'),
@@ -144,6 +146,8 @@ function updateUIFromConfig() {
   els.animationSpeed.value = ap.animationSpeed;
   els.showTrail.checked = ap.showTrail;
   els.headGlow.checked = ap.headGlow;
+  els.straightMode.checked = ap.straightMode;
+  els.headShape.value = ap.headShape || 'triangle';
 
   els.autoHideFullscreen.checked = dp.autoHideFullscreen;
   els.clickThrough.checked = dp.clickThrough;
@@ -190,6 +194,8 @@ function collectConfigFromUI() {
       animationSpeed: els.animationSpeed.value,
       showTrail: els.showTrail.checked,
       headGlow: els.headGlow.checked,
+      straightMode: els.straightMode.checked,
+      headShape: els.headShape.value,
     },
     display: {
       monitor: config ? config.display.monitor : 'primary',
@@ -368,7 +374,7 @@ function bindEvents() {
   const autoSaveInputs = [
     els.workStart, els.workEnd, els.lunchStart, els.lunchEnd,
     els.snakeColor, els.headColor, els.rainbowMode,
-    els.animationSpeed, els.showTrail, els.headGlow,
+    els.animationSpeed, els.showTrail, els.headGlow, els.straightMode, els.headShape,
     els.autoHideFullscreen, els.clickThrough, els.autoStart,
     els.showOnNonWorkdays, els.celebrationEnabled,
   ];
