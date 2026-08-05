@@ -12,12 +12,15 @@ use tauri::{
 };
 use tauri_plugin_autostart::MacosLauncher;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// 应用状态
 struct AppState {
     config: Mutex<AppConfig>,
     visible: Mutex<bool>,
     first_launch: Mutex<bool>,
+    overlay_open: Mutex<bool>,  // 前端弹窗是否打开
+    show_menu_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
 }
 
 // ============ Tauri Commands ============
@@ -109,6 +112,45 @@ fn open_settings(app: tauri::AppHandle) {
     }
 }
 
+fn detail_or_about_open(app: &tauri::AppHandle) -> bool {
+    let state = app.state::<AppState>();
+    let result = *state.overlay_open.lock().unwrap();
+    result
+}
+
+#[tauri::command(name = "get_screen_size")]
+fn get_screen_size() -> (i32, i32) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    let w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+    let h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+    (w, h)
+}
+
+#[tauri::command(name = "get_cursor_pos")]
+fn get_cursor_pos() -> (i32, i32) {
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    use windows::Win32::Foundation::POINT;
+
+    let mut point = POINT { x: 0, y: 0 };
+    unsafe {
+        let _ = GetCursorPos(&mut point);
+    }
+    (point.x, point.y)
+}
+
+#[tauri::command(name = "set_overlay_open")]
+fn set_overlay_open(app: tauri::AppHandle, open: bool) -> bool {
+    let state = app.state::<AppState>();
+    *state.overlay_open.lock().unwrap() = open;
+    // 弹窗打开时确保穿透关闭
+    if open {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.set_ignore_cursor_events(false);
+        }
+    }
+    true
+}
+
 #[tauri::command(name = "set_click_through")]
 fn set_click_through(app: tauri::AppHandle, enabled: bool) -> bool {
     if let Some(window) = app.get_webview_window("main") {
@@ -156,6 +198,77 @@ fn get_config_path() -> String {
     AppConfig::config_path().to_string_lossy().to_string()
 }
 
+// ============ 打卡功能 ============
+
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClockRecord {
+    clock_in: Option<String>,
+    clock_out: Option<String>,
+    work_minutes: i64,
+}
+
+#[tauri::command(name = "clock_in")]
+fn clock_in() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let local_secs = now + 8 * 3600;
+    let hours = (local_secs / 3600) % 24;
+    let minutes = (local_secs % 3600) / 60;
+    let seconds = local_secs % 60;
+    format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+}
+
+#[tauri::command(name = "get_clock_status")]
+fn get_clock_status() -> ClockRecord {
+    // 从配置目录读取打卡记录
+    let record_path = AppConfig::config_path().with_extension("clock");
+    if record_path.exists() {
+        if let Ok(content) = fs::read_to_string(&record_path) {
+            if let Ok(record) = serde_json::from_str::<ClockRecord>(&content) {
+                return record;
+            }
+        }
+    }
+    ClockRecord {
+        clock_in: None,
+        clock_out: None,
+        work_minutes: 0,
+    }
+}
+
+#[tauri::command(name = "save_clock_in")]
+fn save_clock_in(time: String) -> bool {
+    let record_path = AppConfig::config_path().with_extension("clock");
+    let mut record = get_clock_status();
+    record.clock_in = Some(time);
+    record.clock_out = None;
+    record.work_minutes = 0;
+    let _ = fs::write(&record_path, serde_json::to_string(&record).unwrap_or_default());
+    true
+}
+
+#[tauri::command(name = "save_clock_out")]
+fn save_clock_out(time: String) -> bool {
+    let record_path = AppConfig::config_path().with_extension("clock");
+    let mut record = get_clock_status();
+    record.clock_out = Some(time.clone());
+    // 计算工时
+    if let Some(clock_in) = &record.clock_in {
+        let in_parts: Vec<&str> = clock_in.split(':').collect();
+        let out_parts: Vec<&str> = time.split(':').collect();
+        if in_parts.len() == 3 && out_parts.len() == 3 {
+            let in_mins: i64 = in_parts[0].parse().unwrap_or(0) * 60 + in_parts[1].parse().unwrap_or(0);
+            let out_mins: i64 = out_parts[0].parse().unwrap_or(0) * 60 + out_parts[1].parse().unwrap_or(0);
+            record.work_minutes = (out_mins - in_mins).max(0);
+        }
+    }
+    let _ = fs::write(&record_path, serde_json::to_string(&record).unwrap_or_default());
+    true
+}
+
 // ============ 主入口 ============
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -179,6 +292,8 @@ pub fn run() {
             config: Mutex::new(AppConfig::load()),
             visible: Mutex::new(true),
             first_launch: Mutex::new(check_first_launch()),
+            overlay_open: Mutex::new(false),
+            show_menu_item: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             get_config,
@@ -195,9 +310,18 @@ pub fn run() {
             is_first_launch,
             mark_first_launch_done,
             get_config_path,
+            clock_in,
+            get_clock_status,
+            save_clock_in,
+            save_clock_out,
+            get_cursor_pos,
+            set_overlay_open,
+            get_screen_size,
         ])
         .setup(|app| {
             // ======== 主窗口鼠标穿透 ========
+            // 窗口始终穿透（ignore_cursor_events = true）
+            // 只有当用户关闭穿透开关时，才会在鼠标靠近边缘时临时关闭穿透以接收事件
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_ignore_cursor_events(true);
             }
@@ -221,9 +345,16 @@ pub fn run() {
 
             // ======== 系统托盘 ========
             let show_item = CheckMenuItem::with_id(app, "show", "显示进度条", true, true, None::<&str>)?;
+            // 保存菜单项引用到 AppState，供后续更新勾选状态
+            {
+                let state = app.state::<AppState>();
+                *state.show_menu_item.lock().unwrap() = Some(show_item.clone());
+            }
             let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
             let separator1 = PredefinedMenuItem::separator(app)?;
             let autostart_item = CheckMenuItem::with_id(app, "autostart", "开机自启", true, true, None::<&str>)?;
+            let clock_in_item = MenuItem::with_id(app, "clock_in", "📍 上班打卡", true, None::<&str>)?;
+            let clock_out_item = MenuItem::with_id(app, "clock_out", "🏠 下班打卡", true, None::<&str>)?;
             let separator2 = PredefinedMenuItem::separator(app)?;
             let about_item = MenuItem::with_id(app, "about", "关于 SnakeProgress", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
@@ -233,6 +364,8 @@ pub fn run() {
                 &settings_item,
                 &separator1,
                 &autostart_item,
+                &clock_in_item,
+                &clock_out_item,
                 &separator2,
                 &about_item,
                 &quit_item,
@@ -260,6 +393,22 @@ pub fn run() {
                         "autostart" => {
                             toggle_autostart(app);
                         }
+                        "clock_in" => {
+                            let time = clock_in();
+                            let _ = save_clock_in(time.clone());
+                            let _ = app.emit("clock-event", serde_json::json!({
+                                "type": "clockIn",
+                                "time": time,
+                            }));
+                        }
+                        "clock_out" => {
+                            let time = clock_in(); // 复用获取当前时间的逻辑
+                            let _ = save_clock_out(time.clone());
+                            let _ = app.emit("clock-event", serde_json::json!({
+                                "type": "clockOut",
+                                "time": time,
+                            }));
+                        }
                         "about" => {
                             let _ = app.emit("show-about", ());
                         }
@@ -278,6 +427,74 @@ pub fn run() {
                 .build(app)?;
 
             // ======== 首次启动不再弹出设置窗口 ========
+
+            // ======== 动态鼠标穿透切换 ========
+            // click_through = true（开启穿透）→ 始终穿透，不弹窗
+            // click_through = false（关闭穿透）→ 鼠标靠近边缘时临时关闭穿透，允许点击蛇身弹窗
+            let click_app = app.handle().clone();
+            std::thread::spawn(move || {
+                use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+                use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+                use windows::Win32::Foundation::POINT;
+
+                let mut was_near_edge = false;
+                loop {
+                    std::thread::sleep(std::time::Duration::from_millis(80));
+
+                    let config = click_app.state::<AppState>().config.lock().unwrap().clone();
+
+                    if config.display.click_through {
+                        // 开启穿透 → 始终穿透，不切换
+                        if !was_near_edge {
+                            // 确保穿透状态
+                            if let Some(window) = click_app.get_webview_window("main") {
+                                let _ = window.set_ignore_cursor_events(true);
+                            }
+                        }
+                        was_near_edge = false;
+                        continue;
+                    }
+
+                    // 关闭穿透 → 允许蛇身交互
+                    // 如果有弹窗打开，保持穿透关闭，不恢复
+                    if detail_or_about_open(&click_app) {
+                        if let Some(window) = click_app.get_webview_window("main") {
+                            let _ = window.set_ignore_cursor_events(false);
+                        }
+                        was_near_edge = true;
+                        continue;
+                    }
+
+                    let mut point = POINT { x: 0, y: 0 };
+                    let _ = unsafe { GetCursorPos(&mut point) };
+
+                    let margin = config.appearance.margin as i32;
+                    let pixel_size = config.appearance.pixel_size as i32;
+                    let threshold = margin + pixel_size * 3; // 蛇身附近的判定范围
+
+                    let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+                    let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+
+                    let near_edge = point.x <= threshold
+                        || point.y <= threshold
+                        || point.x >= screen_w - threshold
+                        || point.y >= screen_h - threshold;
+
+                    if near_edge && !was_near_edge {
+                        // 鼠标进入边缘 → 临时关闭穿透，让前端可以接收事件
+                        if let Some(window) = click_app.get_webview_window("main") {
+                            let _ = window.set_ignore_cursor_events(false);
+                        }
+                        was_near_edge = true;
+                    } else if !near_edge && was_near_edge {
+                        // 鼠标离开边缘 → 恢复穿透
+                        if let Some(window) = click_app.get_webview_window("main") {
+                            let _ = window.set_ignore_cursor_events(true);
+                        }
+                        was_near_edge = false;
+                    }
+                }
+            });
 
             // ======== 托盘提示定时更新 ========
             let app_handle = app.handle().clone();
@@ -314,6 +531,12 @@ fn toggle_window_visibility(app: &tauri::AppHandle) {
         } else {
             let _ = window.show();
             let _ = app.emit("fade-in", ());
+        }
+        // 同步更新菜单项勾选状态
+        let state = app.state::<AppState>();
+        let show_item = state.show_menu_item.lock().unwrap().clone();
+        if let Some(item) = show_item {
+            let _ = item.set_checked(!is_visible);
         }
     }
 }

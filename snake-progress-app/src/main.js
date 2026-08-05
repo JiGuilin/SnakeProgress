@@ -33,6 +33,10 @@ let lastFrameTime = 0;
 let tooltipVisible = false;
 let tooltipTimer = null;
 
+// 鼠标位置（用于蛇头跟随）
+let mouseX = -9999;
+let mouseY = -9999;
+
 // 全屏检测
 let wasFullscreen = false;
 let fullscreenCheckInterval = null;
@@ -497,6 +501,7 @@ function drawDotsBlock(bx, by, size, block, bIdx) {
 
 /**
  * 绘制蛇头，支持多种形状：triangle, rectangle, square, circle, diamond
+ * 鼠标靠近时蛇头微微偏向鼠标方向
  */
 function drawHead(headBlock, headSize, dx, dy) {
   ctx.fillStyle = getHeadColor();
@@ -504,8 +509,21 @@ function drawHead(headBlock, headSize, dx, dy) {
   ctx.shadowColor = `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0.8)`;
   ctx.shadowBlur = 6;
 
-  const cx = headBlock.x + dx;
-  const cy = headBlock.y + dy;
+  // 蛇头跟随鼠标：鼠标靠近时添加偏移
+  let followDx = 0, followDy = 0;
+  const ps = config.appearance.pixelSize;
+  if (ps > 2) {
+    const distToMouse = Math.hypot(mouseX - headBlock.x, mouseY - headBlock.y);
+    const followRange = ps * 12; // 影响范围
+    if (distToMouse < followRange && distToMouse > 0) {
+      const strength = (1 - distToMouse / followRange) * ps * 0.35;
+      followDx = (mouseX - headBlock.x) / distToMouse * strength;
+      followDy = (mouseY - headBlock.y) / distToMouse * strength;
+    }
+  }
+
+  const cx = headBlock.x + dx + followDx;
+  const cy = headBlock.y + dy + followDy;
   const half = headSize / 2;
   const shape = config.appearance.headShape || 'triangle';
 
@@ -694,6 +712,8 @@ function drawCelebration(timestamp, w, h) {
 // ============ Tooltip ============
 
 canvas.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
   if (!config || !progressInfo) return;
 
   const { pixelSize, margin } = config.appearance;
@@ -749,7 +769,144 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseleave', () => {
   tooltip.classList.remove('visible');
   tooltipVisible = false;
+  mouseX = -9999;
+  mouseY = -9999;
 });
+
+// ============ 蛇身点击弹窗 ============
+
+let detailOverlay = null;
+
+canvas.addEventListener('click', (e) => {
+  if (!config || !progressInfo) return;
+
+  const { pixelSize, margin } = config.appearance;
+  const path = calculateBorderPath(window.innerWidth, window.innerHeight, margin, pixelSize);
+  const percent = calcRealtimePercent();
+  const blocks = getSnakeBlocks(percent, path);
+
+  let clickedSnake = false;
+  for (const block of blocks) {
+    const dist = Math.hypot(e.clientX - block.x, e.clientY - block.y);
+    if (dist < pixelSize * 2.5) {
+      clickedSnake = true;
+      break;
+    }
+  }
+
+  if (clickedSnake) {
+    showDetailDialog(e.clientX, e.clientY);
+  }
+});
+
+function showDetailDialog(clickX, clickY) {
+  // 关闭已有弹窗
+  if (detailOverlay) {
+    detailOverlay.remove();
+    detailOverlay = null;
+    invoke('set_overlay_open', { open: false });
+    return;
+  }
+
+  const percent = calcRealtimePercent();
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  const wt = config.workTime;
+
+  let statusLabel = '';
+  let statusEmoji = '';
+  if (progressInfo.status === 'Working') {
+    statusLabel = '工作中'; statusEmoji = '💼';
+  } else if (progressInfo.status === 'BeforeWork') {
+    statusLabel = '等待上班'; statusEmoji = '☀️';
+  } else if (progressInfo.status === 'AfterWork') {
+    statusLabel = '已完成'; statusEmoji = '🎉';
+  } else if (progressInfo.status === 'NonWorkday') {
+    statusLabel = '非工作日'; statusEmoji = '😴';
+  } else if (progressInfo.isLunchBreak) {
+    statusLabel = '午休中'; statusEmoji = '🌙';
+  }
+
+  const remaining = progressInfo.remainingMinutes || 0;
+  const rHours = Math.floor(remaining / 60);
+  const rMins = remaining % 60;
+
+  // 打卡信息
+  const clockIn = localStorage.getItem('snake_clock_in') || '--';
+  const clockOut = localStorage.getItem('snake_clock_out') || '--';
+  let workDuration = '';
+  if (clockIn !== '--') {
+    const inTime = new Date(clockIn);
+    const diffMs = now - inTime;
+    const diffMins = Math.floor(diffMs / 60000);
+    workDuration = `${Math.floor(diffMins / 60)}h ${diffMins % 60}min`;
+  }
+
+  detailOverlay = document.createElement('div');
+  detailOverlay.id = 'detailOverlay';
+  detailOverlay.style.cssText = `
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 100000;
+  `;
+
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    position: absolute;
+    left: ${Math.min(clickX + 15, window.innerWidth - 260)}px;
+    top: ${Math.min(clickY - 20, window.innerHeight - 320)}px;
+    background: rgba(20, 20, 40, 0.95); color: #e0e0e0;
+    border-radius: 12px; padding: 20px; min-width: 240px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  `;
+
+  dialog.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <span style="font-size:16px;font-weight:bold;">${statusEmoji} ${statusLabel}</span>
+      <span style="font-size:12px;color:#888;">${timeStr}</span>
+    </div>
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:32px;font-weight:bold;color:#4FC3F7;">${percent.toFixed(1)}%</div>
+      <div style="margin-top:6px;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">
+        <div style="width:${percent}%;height:100%;background:linear-gradient(90deg,#4FC3F7,#00E676);border-radius:3px;"></div>
+      </div>
+    </div>
+    <div style="font-size:13px;line-height:2;color:#bbb;">
+      <div>⏰ 工作时段：${wt.start} ~ ${wt.end}</div>
+      ${wt.lunch.enabled ? `<div>🌙 午休时段：${wt.lunch.start} ~ ${wt.lunch.end}</div>` : ''}
+      <div>⏳ 剩余时间：${rHours}h ${rMins}min</div>
+      <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px;">
+        <div>📍 上班打卡：${clockIn !== '--' ? new Date(clockIn).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '--'}</div>
+        <div>📍 下班打卡：${clockOut !== '--' ? new Date(clockOut).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '--'}</div>
+        ${workDuration ? `<div>⏱️ 已在岗：${workDuration}</div>` : ''}
+      </div>
+    </div>
+  `;
+
+  detailOverlay.appendChild(dialog);
+  document.body.appendChild(detailOverlay);
+
+  // 通知 Rust 端弹窗已打开，阻止后台线程恢复穿透
+  invoke('set_overlay_open', { open: true });
+
+  detailOverlay.addEventListener('click', (e) => {
+    if (e.target === detailOverlay || e.target === dialog) {
+      detailOverlay.remove();
+      detailOverlay = null;
+      invoke('set_overlay_open', { open: false });
+    }
+  });
+
+  // 5秒后自动关闭
+  setTimeout(() => {
+    if (document.getElementById('detailOverlay')) {
+      detailOverlay.remove();
+      detailOverlay = null;
+      invoke('set_overlay_open', { open: false });
+    }
+  }, 5000);
+}
 
 // ============ 事件监听 ============
 
@@ -769,9 +926,108 @@ async function setupEventListeners() {
   await listen('show-about', () => {
     showAboutDialog();
   });
+
+  await listen('clock-event', (event) => {
+    const data = event.payload;
+    showClockNotification(data.type, data.time);
+    // 同步到 localStorage 供点击弹窗读取
+    if (data.type === 'clockIn') {
+      const now = new Date();
+      localStorage.setItem('snake_clock_in', now.toISOString());
+      localStorage.removeItem('snake_clock_out');
+    } else if (data.type === 'clockOut') {
+      const now = new Date();
+      localStorage.setItem('snake_clock_out', now.toISOString());
+    }
+  });
 }
 
 // ============ 关于对话框 ============
+
+// ============ 打卡通知 ============
+
+let clockNotification = null;
+
+function showClockNotification(type, time) {
+  // 移除已有通知
+  if (clockNotification) {
+    clockNotification.remove();
+    clockNotification = null;
+  }
+
+  const isClockIn = type === 'clockIn';
+  const emoji = isClockIn ? '📍' : '🏠';
+  const label = isClockIn ? '上班打卡' : '下班打卡';
+  const color = isClockIn ? '#4FC3F7' : '#FF7043';
+
+  // 如果是下班打卡，显示工时
+  let workInfo = '';
+  if (!isClockIn) {
+    const clockInTime = localStorage.getItem('snake_clock_in');
+    if (clockInTime) {
+      const inTime = new Date(clockInTime);
+      const diffMs = Date.now() - inTime.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      workInfo = `<div style="margin-top:6px;font-size:13px;color:#aaa;">⏱️ 今日工时：${Math.floor(diffMins / 60)}h ${diffMins % 60}min</div>`;
+    }
+  }
+
+  clockNotification = document.createElement('div');
+  clockNotification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(20, 20, 40, 0.95); color: #e0e0e0;
+    border-radius: 12px; padding: 16px 24px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    z-index: 100001;
+    animation: slideIn 0.3s ease-out;
+    min-width: 180px;
+  `;
+
+  clockNotification.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <span style="font-size:20px;">${emoji}</span>
+      <span style="font-size:15px;font-weight:bold;color:${color};">${label}成功</span>
+    </div>
+    <div style="font-size:24px;font-weight:bold;">${time}</div>
+    ${workInfo}
+  `;
+
+  // 添加动画样式
+  if (!document.getElementById('clockNotifStyle')) {
+    const style = document.createElement('style');
+    style.id = 'clockNotifStyle';
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes slideOut {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100px); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(clockNotification);
+
+  // 3秒后自动关闭
+  setTimeout(() => {
+    if (clockNotification) {
+      clockNotification.style.animation = 'slideOut 0.3s ease-in forwards';
+      setTimeout(() => {
+        if (clockNotification) {
+          clockNotification.remove();
+          clockNotification = null;
+        }
+      }, 300);
+    }
+  }, 3000);
+}
 
 function showAboutDialog() {
   if (aboutOverlay) {
@@ -836,13 +1092,13 @@ function showAboutDialog() {
     }
   });
 
-  // 临时关闭鼠标穿透
-  invoke('set_click_through', { enabled: false });
+  // 通知 Rust 端弹窗已打开，阻止后台线程恢复穿透
+  invoke('set_overlay_open', { open: true });
 
   const observer = new MutationObserver(() => {
     if (!document.getElementById('aboutOverlay')) {
       observer.disconnect();
-      invoke('set_click_through', { enabled: config.display.clickThrough });
+      invoke('set_overlay_open', { open: false });
     }
   });
   observer.observe(document.body, { childList: true });
