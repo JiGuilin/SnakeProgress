@@ -515,11 +515,14 @@ function drawSpriteHead(headBlock, headSize, dx, dy, variant) {
 
   const cx = headBlock.x + dx + followDx;
   const cy = headBlock.y + dy + followDy;
-  const side = headBlock.side;
+  // side 是蛇身所在边，需转换为蛇的前进方向
+  // 顺时针：top→右, right→下, bottom→左, left→上
+  const sideToDir = { top: 'right', right: 'bottom', bottom: 'left', left: 'top' };
+  const direction = sideToDir[headBlock.side] || 'right';
   const headColor = config.appearance.headColor;
 
   // 生成精灵图
-  const sprite = spriteGen.generateHead(Math.round(headSize), side, headColor, variant);
+  const sprite = spriteGen.generateHead(Math.round(headSize), direction, headColor, variant);
 
   // 绘制蛇头发光
   const headRgb = hexToRgb(headColor);

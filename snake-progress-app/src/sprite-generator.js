@@ -73,16 +73,20 @@ class SpriteGenerator {
     const half = s / 2;
     ctx.fillStyle = color;
 
-    // 三角形蛇头
+    // 三角形蛇头，dir 为前进方向，三角形顶点朝前进方向
     ctx.beginPath();
-    if (dir === 'top') {
+    if (dir === 'right') {
+      // 朝右：顶点在右侧
       ctx.moveTo(s, half); ctx.lineTo(0, 0); ctx.lineTo(0, s);
-    } else if (dir === 'right') {
-      ctx.moveTo(half, s); ctx.lineTo(0, 0); ctx.lineTo(s, 0);
     } else if (dir === 'bottom') {
+      // 朝下：顶点在底部
+      ctx.moveTo(half, s); ctx.lineTo(0, 0); ctx.lineTo(s, 0);
+    } else if (dir === 'left') {
+      // 朝左：顶点在左侧
       ctx.moveTo(0, half); ctx.lineTo(s, 0); ctx.lineTo(s, s);
     } else {
-      ctx.moveTo(half, 0); ctx.lineTo(s, s); ctx.lineTo(0, s);
+      // 朝上：顶点在顶部
+      ctx.moveTo(half, 0); ctx.lineTo(0, s); ctx.lineTo(s, s);
     }
     ctx.closePath();
     ctx.fill();
