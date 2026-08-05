@@ -39,6 +39,7 @@ const els = {
   straightMode: $('straightMode'),
   headShape: $('headShape'),
   skinTexture: $('skinTexture'),
+  showPowerUps: $('showPowerUps'),
   autoHideFullscreen: $('autoHideFullscreen'),
   clickThrough: $('clickThrough'),
   autoStart: $('autoStart'),
@@ -170,6 +171,7 @@ function updateUIFromConfig() {
   setToggle(els.straightMode, ap.straightMode);
   els.headShape.value = ap.headShape || 'triangle';
   els.skinTexture.value = ap.skinTexture || 'solid';
+  setToggle(els.showPowerUps, ap.showPowerUps !== undefined ? ap.showPowerUps : true);
 
   setToggle(els.autoHideFullscreen, dp.autoHideFullscreen);
   setToggle(els.clickThrough, dp.clickThrough);
@@ -219,6 +221,7 @@ function collectConfigFromUI() {
       straightMode: isToggleOn(els.straightMode),
       headShape: els.headShape.value,
       skinTexture: els.skinTexture.value,
+      showPowerUps: isToggleOn(els.showPowerUps),
     },
     display: {
       monitor: config ? config.display.monitor : 'primary',
@@ -373,6 +376,7 @@ function bindEvents() {
     els.lunchEnabled, els.rainbowMode, els.showTrail, els.headGlow,
     els.straightMode, els.autoHideFullscreen, els.clickThrough,
     els.autoStart, els.showOnNonWorkdays, els.celebrationEnabled,
+    els.showPowerUps,
   ];
 
   toggleEls.forEach((el) => {

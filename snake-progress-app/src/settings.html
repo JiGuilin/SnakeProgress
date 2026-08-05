@@ -255,6 +255,11 @@
                 <option value="square">正方形</option>
                 <option value="circle">圆形</option>
                 <option value="diamond">菱形</option>
+                <option value="pixel" disabled>── 像素素材 ──</option>
+                <option value="sprite_pixel">🎮 像素风</option>
+                <option value="sprite_cute">🥰 可爱风</option>
+                <option value="sprite_dragon">🐉 龙族风</option>
+                <option value="sprite_robot">🤖 机械风</option>
               </select>
             </div>
             <div class="field">
@@ -264,8 +269,25 @@
                 <option value="checkerboard">鳞片</option>
                 <option value="stripe">条纹</option>
                 <option value="dots">圆点</option>
+                <option value="pixel" disabled>── 像素素材 ──</option>
+                <option value="sprite_pixel">🎮 像素风</option>
+                <option value="sprite_scale">🛡️ 鳞甲纹理</option>
+                <option value="sprite_armor">⚙️ 装甲纹理</option>
+                <option value="sprite_glow">✨ 发光体</option>
               </select>
             </div>
+          </div>
+
+          <div class="toggle-field">
+            <label class="toggle-label" for="showPowerUps">
+              <span class="toggle-text">里程碑道具</span>
+              <span class="toggle-hint">25%/50%/75%处显示食物</span>
+            </label>
+            <button class="toggle-switch" id="showPowerUps" role="switch" aria-checked="true" type="button">
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+            </button>
           </div>
         </div>
       </section>

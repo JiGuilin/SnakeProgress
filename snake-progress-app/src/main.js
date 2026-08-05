@@ -12,6 +12,11 @@ let progressInfo = null;
 let animationId = null;
 const PROGRESS_UPDATE_INTERVAL = 30000; // 后端状态同步间隔（30秒），percent 由前端实时计算
 
+// 像素素材系统
+const spriteGen = new SpriteGenerator();
+const powerUpSystem = new PowerUpSystem(spriteGen);
+let lastMilestoneCheck = -1; // 上次检查里程碑的百分比
+
 // 动画状态
 let wiggleOffset = 0;
 let headGlowPhase = 0;
@@ -90,6 +95,8 @@ setInterval(() => {
 async function loadConfig() {
   try {
     config = await invoke('get_config');
+    // 配置变更时清除 sprite 缓存
+    if (typeof spriteGen !== 'undefined') spriteGen.clearCache();
   } catch (e) {
     console.error('加载配置失败:', e);
     config = getDefaultConfig();
@@ -174,6 +181,7 @@ function getDefaultConfig() {
       opacity: 80, margin: 2, snakeLengthMode: 'trailing',
       fixedLengthPercent: 20, animationSpeed: 'normal',
       showTrail: false, headGlow: true, straightMode: false, headShape: 'triangle', skinTexture: 'solid',
+      showPowerUps: true,
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -353,6 +361,23 @@ function render(timestamp) {
     drawHeadGlow(blocks[blocks.length - 1], pixelSize, timestamp);
   }
 
+  // 绘制里程碑道具（25%/50%/75%处显示食物）
+  const showPowerUps = config.appearance.showPowerUps !== false;
+  if (showPowerUps) {
+    powerUpSystem.drawMilestones(ctx, path, pixelSize, percent, fadeOpacity);
+    // 检查里程碑收集
+    const roundedPercent = Math.floor(percent);
+    if (roundedPercent !== lastMilestoneCheck) {
+      lastMilestoneCheck = roundedPercent;
+      const collected = powerUpSystem.checkCollection(percent);
+      if (collected) {
+        // 可在此触发通知
+      }
+    }
+    // 绘制吃食物动画
+    powerUpSystem.drawEatAnimations(ctx, path, pixelSize, fadeOpacity);
+  }
+
   // 午休变色效果
   if (progressInfo.isLunchBreak) {
     drawLunchBreakOverlay(w, h);
@@ -394,6 +419,13 @@ function drawSnakeBody(blocks, pixelSize) {
   const snap = tiny;
   const totalBlocks = blocks.length;
   const texture = config.appearance.skinTexture || 'solid';
+  // 从蛇头形状/皮肤纹理中推导 sprite 变体
+  const _headShape = config.appearance.headShape || 'triangle';
+  const _skinTexture = config.appearance.skinTexture || 'solid';
+  const spriteHeadVariant = _headShape.startsWith('sprite_') ? _headShape.slice(7) : null;
+  const spriteBodyVariant = _skinTexture.startsWith('sprite_') ? _skinTexture.slice(7) : null;
+  const useSpriteHead = spriteHeadVariant !== null;
+  const useSpriteBody = spriteBodyVariant !== null;
   // 尾部渐变缩小的点数：根据像素大小动态调整
   // 像素越大，蛇尾渐变越长（1px=0, 2px=0, 4px=5, 6px=7, 8px=9, 12px=13, 16px=17...）
   let tailTaperCount = 0;
@@ -433,13 +465,20 @@ function drawSnakeBody(blocks, pixelSize) {
 
     if (block.isHead && pixelSize > 2) {
       const headSize = pixelSize + 2;
-      drawHead(block, headSize, dx, dy);
+      if (useSpriteHead) {
+        drawSpriteHead(block, headSize, dx, dy, spriteHeadVariant);
+      } else {
+        drawHead(block, headSize, dx, dy);
+      }
     } else {
       const scaledSize = Math.max(1, blockSize * scale);
       const bx = snap ? Math.round(block.x - scaledSize / 2 + dx) : block.x - scaledSize / 2 + dx;
       const by = snap ? Math.round(block.y - scaledSize / 2 + dy) : block.y - scaledSize / 2 + dy;
 
-      if (texture === 'solid' || pixelSize <= 3) {
+      if (useSpriteBody) {
+        // 使用 sprite 素材绘制蛇身
+        drawSpriteBodyBlock(bx, by, scaledSize, block, bIdx, spriteBodyVariant);
+      } else if (texture === 'solid' || pixelSize <= 3) {
         // 纯色模式或小像素：直接绘制方块
         ctx.fillStyle = block.isHead ? getHeadColor() : getBlockColor(block);
         ctx.fillRect(bx, by, scaledSize, scaledSize);
@@ -455,6 +494,70 @@ function drawSnakeBody(blocks, pixelSize) {
       }
     }
   }
+}
+
+/**
+ * 使用 Sprite 素材绘制蛇头
+ */
+function drawSpriteHead(headBlock, headSize, dx, dy, variant) {
+  // 蛇头跟随鼠标偏移
+  let followDx = 0, followDy = 0;
+  const ps = config.appearance.pixelSize;
+  if (ps > 2) {
+    const distToMouse = Math.hypot(mouseX - headBlock.x, mouseY - headBlock.y);
+    const followRange = ps * 12;
+    if (distToMouse < followRange && distToMouse > 0) {
+      const strength = (1 - distToMouse / followRange) * ps * 0.35;
+      followDx = (mouseX - headBlock.x) / distToMouse * strength;
+      followDy = (mouseY - headBlock.y) / distToMouse * strength;
+    }
+  }
+
+  const cx = headBlock.x + dx + followDx;
+  const cy = headBlock.y + dy + followDy;
+  const side = headBlock.side;
+  const headColor = config.appearance.headColor;
+
+  // 生成精灵图
+  const sprite = spriteGen.generateHead(Math.round(headSize), side, headColor, variant);
+
+  // 绘制蛇头发光
+  const headRgb = hexToRgb(headColor);
+  ctx.shadowColor = `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0.8)`;
+  ctx.shadowBlur = 6;
+
+  ctx.drawImage(sprite, cx - headSize / 2, cy - headSize / 2, headSize, headSize);
+
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+}
+
+/**
+ * 使用 Sprite 素材绘制蛇身方块
+ */
+function drawSpriteBodyBlock(bx, by, size, block, bIdx, variant) {
+  const bodyColor = getBlockColor(block);
+  // 从 hsla/rgba 字符串提取 hex 颜色给 sprite generator
+  const hexColor = config.appearance.rainbowMode
+    ? hslToHex((block.progressRatio * 360) % 360, 100, 55)
+    : config.appearance.snakeColor;
+
+  const sprite = spriteGen.generateBody(Math.round(size), hexColor, variant, bIdx);
+  ctx.drawImage(sprite, bx, by, size, size);
+}
+
+/**
+ * HSL 转 Hex（用于 sprite 颜色）
+ */
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
 }
 
 /**

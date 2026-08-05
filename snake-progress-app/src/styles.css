@@ -512,6 +512,13 @@ html, body {
   color: var(--sp-text-secondary);
 }
 
+.toggle-hint {
+  display: block;
+  font-size: 11px;
+  color: var(--sp-text-tertiary, #888);
+  margin-top: 2px;
+}
+
 .toggle-switch {
   background: none;
   border: none;

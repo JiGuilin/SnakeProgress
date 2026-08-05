@@ -3,6 +3,9 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
+// serde 默认值函数
+fn default_true() -> bool { true }
+
 /// 应用配置结构体，与需求文档 §7.1 一致
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,8 +52,10 @@ pub struct Appearance {
     pub show_trail: bool,
     pub head_glow: bool,
     pub straight_mode: bool,
-    pub head_shape: String, // triangle, rectangle, square, circle, diamond
-    pub skin_texture: String, // solid, checkerboard, stripe, dots
+    pub head_shape: String, // triangle, rectangle, square, circle, diamond, sprite_pixel/cute/dragon/robot
+    pub skin_texture: String, // solid, checkerboard, stripe, dots, sprite_pixel/scale/armor/glow
+    #[serde(default = "default_true")]
+    pub show_power_ups: bool, // 显示里程碑道具
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,6 +114,7 @@ impl Default for AppConfig {
                 straight_mode: false,
                 head_shape: "triangle".to_string(),
                 skin_texture: "solid".to_string(),
+                show_power_ups: true,
             },
             display: Display {
                 monitor: "primary".to_string(),
