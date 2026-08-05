@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 // serde 默认值函数
 fn default_true() -> bool { true }
+fn default_body_anim() -> String { "none".to_string() }
+fn default_body_motion() -> String { "wiggle".to_string() }
 
 /// 应用配置结构体，与需求文档 §7.1 一致
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,11 +53,18 @@ pub struct Appearance {
     pub animation_speed: String,
     pub show_trail: bool,
     pub head_glow: bool,
-    pub straight_mode: bool,
+    #[serde(default = "default_body_motion")]
+    pub body_motion_mode: String, // straight, wiggle, wave, bounce, coil
     pub head_shape: String, // triangle, rectangle, square, circle, diamond, sprite_pixel/cute/dragon/robot
     pub skin_texture: String, // solid, checkerboard, stripe, dots, sprite_pixel/scale/armor/glow
     #[serde(default = "default_true")]
     pub show_power_ups: bool, // 显示里程碑道具
+    #[serde(default = "default_body_anim")]
+    pub body_anim_effect: String, // none, breathing, pulse, wave, sparkle, rainbow, glow, ripple
+    #[serde(default = "default_body_anim")]
+    pub head_anim_effect: String, // none, nod, bob, wobble, shake, bounce
+    #[serde(default = "default_body_anim")]
+    pub tail_anim_effect: String, // none, swish, curl, pulse, flame, flow
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,10 +120,13 @@ impl Default for AppConfig {
                 animation_speed: "normal".to_string(),
                 show_trail: false,
                 head_glow: true,
-                straight_mode: false,
+                body_motion_mode: "wiggle".to_string(),
                 head_shape: "triangle".to_string(),
                 skin_texture: "solid".to_string(),
                 show_power_ups: true,
+                body_anim_effect: "none".to_string(),
+                head_anim_effect: "none".to_string(),
+                tail_anim_effect: "none".to_string(),
             },
             display: Display {
                 monitor: "primary".to_string(),

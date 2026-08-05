@@ -211,6 +211,55 @@
             </select>
           </div>
 
+          <div class="field">
+            <label class="field-label" for="bodyAnimEffect">蛇身特效</label>
+            <select class="field-select" id="bodyAnimEffect">
+              <option value="none">关闭</option>
+              <option value="breathing">呼吸灯</option>
+              <option value="pulse">脉冲波纹</option>
+              <option value="wave">色彩波浪</option>
+              <option value="sparkle">星光闪烁</option>
+              <option value="rainbow">彩虹流光</option>
+              <option value="glow">外发光</option>
+              <option value="ripple">水波纹</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="bodyMotionMode">蛇身动画</label>
+            <select class="field-select" id="bodyMotionMode">
+              <option value="straight">关闭</option>
+              <option value="wiggle" selected>抖动</option>
+              <option value="wave">波浪</option>
+              <option value="bounce">弹跳</option>
+              <option value="coil">缠绕</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="headAnimEffect">蛇头动画</label>
+            <select class="field-select" id="headAnimEffect">
+              <option value="none">关闭</option>
+              <option value="nod">点头</option>
+              <option value="bob">浮动</option>
+              <option value="wobble">摇摆</option>
+              <option value="shake">颤抖</option>
+              <option value="bounce">弹跳</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="tailAnimEffect">尾巴动画</label>
+            <select class="field-select" id="tailAnimEffect">
+              <option value="none">关闭</option>
+              <option value="swish">摆尾</option>
+              <option value="curl">卷尾</option>
+              <option value="pulse">脉动尾</option>
+              <option value="flame">火焰尾</option>
+              <option value="flow">流动尾</option>
+            </select>
+          </div>
+
           <div class="toggle-field">
             <label class="toggle-label" for="showTrail">
               <span class="toggle-text">显示未完成轨迹</span>
@@ -227,17 +276,6 @@
               <span class="toggle-text">蛇头发光效果</span>
             </label>
             <button class="toggle-switch" id="headGlow" role="switch" aria-checked="true" type="button">
-              <span class="toggle-track">
-                <span class="toggle-thumb"></span>
-              </span>
-            </button>
-          </div>
-
-          <div class="toggle-field">
-            <label class="toggle-label" for="straightMode">
-              <span class="toggle-text">直线模式</span>
-            </label>
-            <button class="toggle-switch" id="straightMode" role="switch" aria-checked="false" type="button">
               <span class="toggle-track">
                 <span class="toggle-thumb"></span>
               </span>

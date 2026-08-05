@@ -34,9 +34,13 @@ const els = {
   fixedLengthPercent: $('fixedLengthPercent'),
   fixedLengthPercentVal: $('fixedLengthPercentVal'),
   animationSpeed: $('animationSpeed'),
+  bodyAnimEffect: $('bodyAnimEffect'),
+  headAnimEffect: $('headAnimEffect'),
+  tailAnimEffect: $('tailAnimEffect'),
   showTrail: $('showTrail'),
   headGlow: $('headGlow'),
-  straightMode: $('straightMode'),
+  straightMode: null, // 已弃用，由 bodyMotionMode 替代
+  bodyMotionMode: $('bodyMotionMode'),
   headShape: $('headShape'),
   skinTexture: $('skinTexture'),
   showPowerUps: $('showPowerUps'),
@@ -166,9 +170,19 @@ function updateUIFromConfig() {
   els.fixedLengthPercent.value = ap.fixedLengthPercent;
   els.fixedLengthPercentVal.textContent = ap.fixedLengthPercent + '%';
   els.animationSpeed.value = ap.animationSpeed;
+  els.bodyAnimEffect.value = ap.bodyAnimEffect || 'none';
+els.headAnimEffect.value = ap.headAnimEffect || 'none';
+els.tailAnimEffect.value = ap.tailAnimEffect || 'none';
   setToggle(els.showTrail, ap.showTrail);
   setToggle(els.headGlow, ap.headGlow);
-  setToggle(els.straightMode, ap.straightMode);
+  // 迁移旧配置 straightMode -> bodyMotionMode
+  if (ap.bodyMotionMode) {
+    els.bodyMotionMode.value = ap.bodyMotionMode;
+  } else if (ap.straightMode) {
+    els.bodyMotionMode.value = 'straight';
+  } else {
+    els.bodyMotionMode.value = 'wiggle';
+  }
   els.headShape.value = ap.headShape || 'triangle';
   els.skinTexture.value = ap.skinTexture || 'solid';
   setToggle(els.showPowerUps, ap.showPowerUps !== undefined ? ap.showPowerUps : true);
@@ -216,9 +230,13 @@ function collectConfigFromUI() {
       snakeLengthMode: els.snakeLengthMode.value,
       fixedLengthPercent: parseInt(els.fixedLengthPercent.value),
       animationSpeed: els.animationSpeed.value,
+      bodyAnimEffect: els.bodyAnimEffect.value,
+    headAnimEffect: els.headAnimEffect.value,
+    tailAnimEffect: els.tailAnimEffect.value,
       showTrail: isToggleOn(els.showTrail),
       headGlow: isToggleOn(els.headGlow),
-      straightMode: isToggleOn(els.straightMode),
+      bodyMotionMode: els.bodyMotionMode.value,
+      straightMode: els.bodyMotionMode.value === 'straight', // 向后兼容
       headShape: els.headShape.value,
       skinTexture: els.skinTexture.value,
       showPowerUps: isToggleOn(els.showPowerUps),
@@ -374,7 +392,7 @@ function bindEvents() {
   // Toggle 开关 - 统一绑定所有 toggle-switch
   const toggleEls = [
     els.lunchEnabled, els.rainbowMode, els.showTrail, els.headGlow,
-    els.straightMode, els.autoHideFullscreen, els.clickThrough,
+    els.autoHideFullscreen, els.clickThrough,
     els.autoStart, els.showOnNonWorkdays, els.celebrationEnabled,
     els.showPowerUps,
   ];
@@ -432,6 +450,10 @@ function bindEvents() {
     els.workStart, els.workEnd, els.lunchStart, els.lunchEnd,
     els.snakeColor, els.headColor,
     els.animationSpeed, els.headShape, els.skinTexture,
+    els.bodyAnimEffect,
+els.headAnimEffect,
+els.tailAnimEffect,
+els.bodyMotionMode,
   ];
 
   autoSaveInputs.forEach((el) => {

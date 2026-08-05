@@ -20,6 +20,7 @@ let lastMilestoneCheck = -1; // 上次检查里程碑的百分比
 // 动画状态
 let wiggleOffset = 0;
 let headGlowPhase = 0;
+let bodyAnimPhase = 0; // 蛇身动画效果相位
 let celebrationActive = false;
 let celebrationStart = 0;
 let lastCelebrationPercent = 0;
@@ -180,8 +181,8 @@ function getDefaultConfig() {
       colorMode: 'solid', rainbowMode: false, pixelSize: 8,
       opacity: 80, margin: 2, snakeLengthMode: 'trailing',
       fixedLengthPercent: 20, animationSpeed: 'normal',
-      showTrail: false, headGlow: true, straightMode: false, headShape: 'triangle', skinTexture: 'solid',
-      showPowerUps: true,
+      showTrail: false, headGlow: true, straightMode: false, bodyMotionMode: 'wiggle', headShape: 'triangle', skinTexture: 'solid',
+      showPowerUps: true, bodyAnimEffect: 'none', headAnimEffect: 'none', tailAnimEffect: 'none',
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -346,6 +347,8 @@ function render(timestamp) {
   const speedMap = { slow: 0.3, normal: 1, fast: 3 };
   const speed = speedMap[config.appearance.animationSpeed] || 1;
   wiggleOffset = (wiggleOffset + speed * 0.5) % pixelSize;
+  // 更新蛇身动画相位
+  bodyAnimPhase = (timestamp / 1000) % (Math.PI * 2);
 
   // 绘制轨迹
   if (showTrail) {
@@ -415,7 +418,8 @@ function drawTrail(path, percent, pixelSize) {
 function drawSnakeBody(blocks, pixelSize) {
   const gap = pixelSize >= 4 ? 1 : 0;
   const blockSize = Math.max(1, pixelSize - gap);
-  const tiny = pixelSize <= 2 || config.appearance.straightMode; // 无摆动
+  const motionMode = config.appearance.bodyMotionMode || (config.appearance.straightMode ? 'straight' : 'wiggle');
+  const tiny = pixelSize <= 2 || motionMode === 'straight'; // 直线模式或小像素无摆动
   const snap = tiny;
   const totalBlocks = blocks.length;
   const texture = config.appearance.skinTexture || 'solid';
@@ -446,11 +450,34 @@ function drawSnakeBody(blocks, pixelSize) {
       const isHeadZone = bodyPos >= totalBlocks - headNoWiggle;
       const isTailZone = bodyPos < tailNoWiggle;
       if (!isHeadZone && !isTailZone) {
-        const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
-        if (block.side === 'top' || block.side === 'bottom') {
-          dy = wiggle;
-        } else {
-          dx = wiggle;
+        const isVertical = block.side === 'top' || block.side === 'bottom';
+        switch (motionMode) {
+          case 'wave': {
+            // 波浪：大幅正弦波，蛇身像水波一样起伏
+            const wave = Math.sin((block.index + wiggleOffset) * 0.35) * Math.min(2, pixelSize * 0.3);
+            if (isVertical) { dy = wave; } else { dx = wave; }
+            break;
+          }
+          case 'bounce': {
+            // 弹跳：整段蛇身上下弹跳，幅度随位置变化
+            const bounce = Math.abs(Math.sin((block.index + wiggleOffset) * 0.3)) * Math.min(2, pixelSize * 0.25);
+            if (isVertical) { dy = -bounce; } else { dx = -bounce; }
+            break;
+          }
+          case 'coil': {
+            // 缠绕：双轴交叉波动，营造蛇身缠绕感
+            const c1 = Math.sin((block.index + wiggleOffset) * 0.4) * Math.min(1.5, pixelSize * 0.18);
+            const c2 = Math.cos((block.index + wiggleOffset) * 0.25) * Math.min(1, pixelSize * 0.1);
+            dx = c1; dy = c2;
+            break;
+          }
+          case 'wiggle':
+          default: {
+            // 抖动（默认）：原有小幅摆动
+            const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
+            if (isVertical) { dy = wiggle; } else { dx = wiggle; }
+            break;
+          }
         }
       }
     }
@@ -465,15 +492,32 @@ function drawSnakeBody(blocks, pixelSize) {
 
     if (block.isHead && pixelSize > 2) {
       const headSize = pixelSize + 2;
+      // 蛇头动画偏移
+      const headAnim = config.appearance.headAnimEffect || 'none';
+      let headDx = 0, headDy = 0;
+      if (headAnim !== 'none') {
+        const headOff = calcHeadAnimOffset(block, pixelSize, headAnim);
+        headDx = headOff.dx;
+        headDy = headOff.dy;
+      }
       if (useSpriteHead) {
-        drawSpriteHead(block, headSize, dx, dy, spriteHeadVariant);
+        drawSpriteHead(block, headSize, dx + headDx, dy + headDy, spriteHeadVariant);
       } else {
-        drawHead(block, headSize, dx, dy);
+        drawHead(block, headSize, dx + headDx, dy + headDy);
       }
     } else {
-      const scaledSize = Math.max(1, blockSize * scale);
-      const bx = snap ? Math.round(block.x - scaledSize / 2 + dx) : block.x - scaledSize / 2 + dx;
-      const by = snap ? Math.round(block.y - scaledSize / 2 + dy) : block.y - scaledSize / 2 + dy;
+      // 尾巴动画偏移
+      const tailAnim = config.appearance.tailAnimEffect || 'none';
+      let tailDx = 0, tailDy = 0, tailScale = 1;
+      if (tailAnim !== 'none' && tailTaperCount > 0 && bodyPos < tailTaperCount) {
+        const tailOff = calcTailAnimOffset(block, bIdx, tailTaperCount, pixelSize, tailAnim);
+        tailDx = tailOff.dx;
+        tailDy = tailOff.dy;
+        if (tailOff.scale) tailScale = tailOff.scale;
+      }
+      const scaledSize = Math.max(1, blockSize * scale * tailScale);
+      const bx = snap ? Math.round(block.x - scaledSize / 2 + dx + tailDx) : block.x - scaledSize / 2 + dx + tailDx;
+      const by = snap ? Math.round(block.y - scaledSize / 2 + dy + tailDy) : block.y - scaledSize / 2 + dy + tailDy;
 
       if (useSpriteBody) {
         // 使用 sprite 素材绘制蛇身
@@ -492,7 +536,234 @@ function drawSnakeBody(blocks, pixelSize) {
         // 圆点：方块内绘制圆点
         drawDotsBlock(bx, by, scaledSize, block, bIdx);
       }
+
+      // 蛇身动画效果叠加
+      const bodyAnim = config.appearance.bodyAnimEffect || 'none';
+      if (bodyAnim !== 'none') {
+        drawBodyAnimEffect(bx, by, scaledSize, block, bIdx, totalBlocks, bodyAnim);
+      }
     }
+  }
+}
+
+/**
+ * 蛇身动画效果叠加
+ * @param {number} bx - 方块左上角 x
+ * @param {number} by - 方块左上角 y
+ * @param {number} size - 方块尺寸
+ * @param {Object} block - 蛇身块数据
+ * @param {number} bIdx - 在蛇身中的索引
+ * @param {number} total - 蛇身总块数
+ * @param {string} effect - 效果类型: breathing, pulse, wave, sparkle
+ */
+function drawBodyAnimEffect(bx, by, size, block, bIdx, total, effect) {
+  const phase = bodyAnimPhase;
+  const cx = bx + size / 2;
+  const cy = by + size / 2;
+
+  switch (effect) {
+    case 'breathing': {
+      // 呼吸灯：整条蛇明暗周期性缓慢脉动
+      const breathVal = Math.sin(phase * 0.8);
+      if (breathVal > 0) {
+        // 亮相：叠加白色高光
+        ctx.fillStyle = `rgba(255, 255, 255, ${breathVal * 0.35 * fadeOpacity})`;
+      } else {
+        // 暗相：叠加黑色遮罩
+        ctx.fillStyle = `rgba(0, 0, 0, ${-breathVal * 0.25 * fadeOpacity})`;
+      }
+      ctx.fillRect(bx, by, size, size);
+      break;
+    }
+    case 'pulse': {
+      // 脉冲：从蛇尾向蛇头传播的亮色光带，宽度较大
+      const pulseSpeed = 2;
+      const pulseLen = 0.25; // 光带宽度占蛇长25%
+      const headRatio = bIdx / total;
+      const pulsePos = (phase * pulseSpeed / (Math.PI * 2)) % 1;
+      const dist = Math.abs(headRatio - pulsePos);
+      const wrappedDist = Math.min(dist, 1 - dist);
+      if (wrappedDist < pulseLen) {
+        // 中心最亮，边缘渐弱
+        const intensity = Math.pow(1 - wrappedDist / pulseLen, 1.5) * 0.55;
+        ctx.fillStyle = `rgba(255, 255, 255, ${intensity * fadeOpacity})`;
+        ctx.fillRect(bx, by, size, size);
+      }
+      break;
+    }
+    case 'wave': {
+      // 色彩波浪：沿蛇身流动的彩虹色带，较强可见度
+      const waveHue = ((bIdx / total) * 360 + phase * 60) % 360;
+      const waveAlpha = 0.45 * fadeOpacity;
+      ctx.fillStyle = `hsla(${waveHue}, 90%, 60%, ${waveAlpha})`;
+      ctx.fillRect(bx, by, size, size);
+      break;
+    }
+    case 'sparkle': {
+      // 闪烁星光：随机位置出现的明显亮点+十字光芒
+      const seed = block.index * 7 + Math.floor(phase * 4);
+      const rand = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453;
+      const sparkleChance = rand - Math.floor(rand);
+      if (sparkleChance > 0.75) { // 更多方块参与闪烁
+        const flicker = 0.5 + Math.sin(phase * 5 + block.index) * 0.5; // 0~1 闪烁
+        const sparkleAlpha = flicker * 0.8 * fadeOpacity;
+        const dotR = Math.max(1.5, size * 0.35);
+        // 中心亮点
+        ctx.fillStyle = `rgba(255, 255, 255, ${sparkleAlpha})`;
+        ctx.beginPath();
+        ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+        ctx.fill();
+        // 十字光芒（仅大方块时）
+        if (size >= 6) {
+          const armLen = size * 0.6;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${sparkleAlpha * 0.5})`;
+          ctx.lineWidth = Math.max(1, size * 0.08);
+          ctx.beginPath();
+          ctx.moveTo(cx - armLen, cy); ctx.lineTo(cx + armLen, cy);
+          ctx.moveTo(cx, cy - armLen); ctx.lineTo(cx, cy + armLen);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case 'rainbow': {
+      // 彩虹流光：饱和度更高的彩虹色沿蛇身流动，带渐变过渡
+      const rainbowHue = ((bIdx / total) * 720 + phase * 80) % 360;
+      const rainbowAlpha = 0.5 * fadeOpacity;
+      const saturation = 95;
+      const lightness = 55 + Math.sin(phase * 1.5 + bIdx * 0.4) * 10;
+      ctx.fillStyle = `hsla(${rainbowHue}, ${saturation}%, ${lightness}%, ${rainbowAlpha})`;
+      ctx.fillRect(bx, by, size, size);
+      break;
+    }
+    case 'glow': {
+      // 外发光：每个方块外围叠加柔和辉光
+      const glowPulse = 0.4 + Math.sin(phase * 1.2 + bIdx * 0.3) * 0.2;
+      const glowR = size * 0.7;
+      const grad = ctx.createRadialGradient(cx, cy, size * 0.2, cx, cy, glowR);
+      grad.addColorStop(0, `rgba(255, 220, 100, ${glowPulse * fadeOpacity})`);
+      grad.addColorStop(1, `rgba(255, 220, 100, 0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(bx - glowR * 0.3, by - glowR * 0.3, size + glowR * 0.6, size + glowR * 0.6);
+      break;
+    }
+    case 'ripple': {
+      // 水波纹：从蛇头向蛇尾传播的环形波纹
+      const rippleSpeed = 1.5;
+      const rippleLen = 0.2;
+      const headRatio = bIdx / total;
+      const ripplePos = (phase * rippleSpeed / (Math.PI * 2)) % 1;
+      const dist = Math.abs(headRatio - ripplePos);
+      const wrappedDist = Math.min(dist, 1 - dist);
+      if (wrappedDist < rippleLen) {
+        const waveVal = Math.sin((wrappedDist / rippleLen) * Math.PI * 2);
+        if (waveVal > 0) {
+          const rippleAlpha = waveVal * 0.35 * fadeOpacity;
+          ctx.strokeStyle = `rgba(100, 200, 255, ${rippleAlpha})`;
+          ctx.lineWidth = Math.max(1, size * 0.15);
+          ctx.beginPath();
+          ctx.arc(cx, cy, size * 0.45, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * 蛇头动画偏移计算
+ * @returns {{ dx: number, dy: number }}
+ */
+function calcHeadAnimOffset(headBlock, pixelSize, effect) {
+  const phase = bodyAnimPhase;
+  const amp = pixelSize * 0.6; // 动画幅度
+  const side = headBlock.side;
+
+  switch (effect) {
+    case 'nod': {
+      // 点头：沿前进方向前后摆动
+      const offset = Math.sin(phase * 2) * amp;
+      if (side === 'top') return { dx: offset, dy: 0 };
+      if (side === 'right') return { dx: 0, dy: offset };
+      if (side === 'bottom') return { dx: -offset, dy: 0 };
+      return { dx: 0, dy: -offset };
+    }
+    case 'bob': {
+      // 上下浮动：垂直于前进方向摆动
+      const offset = Math.sin(phase * 2.5) * amp * 0.8;
+      if (side === 'top' || side === 'bottom') return { dx: 0, dy: offset };
+      return { dx: offset, dy: 0 };
+    }
+    case 'wobble': {
+      // 摇摆：双轴混合摆动
+      const ox = Math.sin(phase * 3) * amp * 0.5;
+      const oy = Math.cos(phase * 2.3) * amp * 0.5;
+      return { dx: ox, dy: oy };
+    }
+    case 'shake': {
+      // 颤抖：高频小幅快速振动
+      const sx = Math.sin(phase * 12) * amp * 0.25;
+      const sy = Math.cos(phase * 11) * amp * 0.25;
+      return { dx: sx, dy: sy };
+    }
+    case 'bounce': {
+      // 弹跳：沿垂直方向弹跳（利用 abs(sin) 实现弹跳感）
+      const bounceY = -Math.abs(Math.sin(phase * 3)) * amp * 0.8;
+      if (side === 'top' || side === 'bottom') return { dx: 0, dy: bounceY };
+      return { dx: bounceY, dy: 0 };
+    }
+    default:
+      return { dx: 0, dy: 0 };
+  }
+}
+
+/**
+ * 尾巴动画偏移计算
+ * @returns {{ dx: number, dy: number, scale?: number }}
+ */
+function calcTailAnimOffset(block, bIdx, tailLen, pixelSize, effect) {
+  const phase = bodyAnimPhase;
+  const progress = bIdx / tailLen; // 0=尾尖, 1=尾根
+  const amp = pixelSize * 0.5 * progress; // 越靠近尾尖幅度越大... 不对，反过来更自然
+  const ampByPos = pixelSize * 0.4 * (1 - progress); // 尾根幅度大，尾尖小
+  const side = block.side;
+
+  switch (effect) {
+    case 'swish': {
+      // 摆尾：沿垂直方向来回摆动，越靠近尾根越明显
+      const offset = Math.sin(phase * 3 + bIdx * 0.5) * ampByPos;
+      if (side === 'top' || side === 'bottom') return { dx: 0, dy: offset };
+      return { dx: offset, dy: 0 };
+    }
+    case 'curl': {
+      // 卷尾：尾巴末端周期性收缩变细
+      const curlFactor = Math.sin(phase * 2) * 0.3;
+      const extraScale = 1 + (progress < 0.5 ? curlFactor * (1 - progress * 2) : 0);
+      return { dx: 0, dy: 0, scale: Math.max(0.2, extraScale) };
+    }
+    case 'pulse': {
+      // 脉动尾：尾巴整体大小周期性变化
+      const pulseFactor = 1 + Math.sin(phase * 2.5 + bIdx * 0.3) * 0.25;
+      return { dx: 0, dy: 0, scale: pulseFactor };
+    }
+    case 'flame': {
+      // 火焰尾：尾巴末端不规则抖动+缩放模拟火焰
+      const flameOff = Math.sin(phase * 5 + bIdx * 1.7) * ampByPos * 0.6;
+      const flameScale = 1 + Math.sin(phase * 4 + bIdx * 2.1) * 0.2 * (1 - progress);
+      if (side === 'top' || side === 'bottom') return { dx: flameOff, dy: 0, scale: Math.max(0.2, flameScale) };
+      return { dx: 0, dy: flameOff, scale: Math.max(0.2, flameScale) };
+    }
+    case 'flow': {
+      // 流动尾：尾巴沿前进方向周期性流动偏移
+      const flowOff = Math.sin(phase * 2 + bIdx * 0.8) * ampByPos * 0.5;
+      if (side === 'top') return { dx: flowOff, dy: 0 };
+      if (side === 'right') return { dx: 0, dy: flowOff };
+      if (side === 'bottom') return { dx: -flowOff, dy: 0 };
+      return { dx: 0, dy: -flowOff };
+    }
+    default:
+      return { dx: 0, dy: 0 };
   }
 }
 
