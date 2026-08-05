@@ -292,6 +292,8 @@ function getHeadColor() {
 }
 
 function hexToRgb(hex) {
+  // 防御：多色逗号分隔时取第一个
+  hex = hex.split(',')[0].trim();
   hex = hex.replace('#', '');
   return {
     r: parseInt(hex.substring(0, 2), 16),
@@ -812,9 +814,13 @@ function drawSpriteHead(headBlock, headSize, dx, dy, variant) {
 function drawSpriteBodyBlock(bx, by, size, block, bIdx, variant) {
   const bodyColor = getBlockColor(block);
   // 从 hsla/rgba 字符串提取 hex 颜色给 sprite generator
-  const hexColor = config.appearance.rainbowMode
-    ? hslToHex((block.progressRatio * 360) % 360, 100, 55)
-    : config.appearance.snakeColor;
+  let hexColor;
+  if (config.appearance.rainbowMode) {
+    hexColor = hslToHex((block.progressRatio * 360) % 360, 100, 55);
+  } else {
+    // 渐变模式 snakeColor 可能是逗号分隔的多色字符串，取第一个颜色
+    hexColor = config.appearance.snakeColor.split(',')[0].trim();
+  }
 
   const sprite = spriteGen.generateBody(Math.round(size), hexColor, variant, bIdx);
   ctx.drawImage(sprite, bx, by, size, size);

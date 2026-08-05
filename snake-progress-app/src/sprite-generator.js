@@ -33,8 +33,10 @@ class SpriteGenerator {
    * @param {string} variant - 变体: 'classic', 'pixel', 'cute', 'dragon', 'robot'
    * @returns {HTMLCanvasElement}
    */
-  generateHead(size, direction, headColor, variant = 'classic') {
-    const key = this._getCacheKey('head', variant, size, direction, headColor);
+generateHead(size, direction, headColor, variant = 'classic') {
+// 防御：多色逗号分隔时取第一个
+headColor = headColor.split(',')[0].trim();
+const key = this._getCacheKey('head', variant, size, direction, headColor);
     if (this.cache.has(key)) return this.cache.get(key);
 
     const canvas = document.createElement('canvas');
@@ -244,8 +246,10 @@ class SpriteGenerator {
    * @param {number} index - 在蛇身中的位置索引（用于纹理变化）
    * @returns {HTMLCanvasElement}
    */
-  generateBody(size, bodyColor, variant = 'classic', index = 0) {
-    const key = this._getCacheKey('body', variant, size, index % 2, bodyColor);
+generateBody(size, bodyColor, variant = 'classic', index = 0) {
+// 防御：多色逗号分隔时取第一个
+bodyColor = bodyColor.split(',')[0].trim();
+const key = this._getCacheKey('body', variant, size, index % 2, bodyColor);
     if (this.cache.has(key)) return this.cache.get(key);
 
     const canvas = document.createElement('canvas');
@@ -371,14 +375,14 @@ class SpriteGenerator {
     // 发光体 - 中心亮，边缘暗
     const gradient = ctx.createRadialGradient(s/2, s/2, 0, s/2, s/2, s * 0.7);
     gradient.addColorStop(0, `rgba(${Math.min(255,rgb.r+80)},${Math.min(255,rgb.g+80)},${Math.min(255,rgb.b+80)},1)`);
-    gradient.addColorStop(0.5, color);
+    gradient.addColorStop(0.5, `rgba(${rgb.r},${rgb.g},${rgb.b},1)`);
     gradient.addColorStop(1, `rgba(${Math.floor(rgb.r*0.4)},${Math.floor(rgb.g*0.4)},${Math.floor(rgb.b*0.4)},1)`);
 
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, s, s);
 
     // 外发光
-    ctx.shadowColor = color;
+    ctx.shadowColor = `rgba(${rgb.r},${rgb.g},${rgb.b},1)`;
     ctx.shadowBlur = s * 0.5;
     ctx.fillStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},0.3)`;
     ctx.fillRect(s * 0.2, s * 0.2, s * 0.6, s * 0.6);
@@ -720,14 +724,16 @@ class SpriteGenerator {
     }
   }
 
-  _hexToRgb(hex) {
-    hex = hex.replace('#', '');
-    return {
-      r: parseInt(hex.substring(0, 2), 16),
-      g: parseInt(hex.substring(2, 4), 16),
-      b: parseInt(hex.substring(4, 6), 16),
-    };
-  }
+_hexToRgb(hex) {
+// 防御：多色逗号分隔时取第一个
+hex = hex.split(',')[0].trim();
+hex = hex.replace('#', '');
+return {
+r: parseInt(hex.substring(0, 2), 16),
+g: parseInt(hex.substring(2, 4), 16),
+b: parseInt(hex.substring(4, 6), 16),
+};
+}
 }
 
 // ============ 道具系统 ============
