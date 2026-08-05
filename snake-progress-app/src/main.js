@@ -175,20 +175,24 @@ function getDefaultConfig() {
  */
 function calculateBorderPath(width, height, margin, pixelSize) {
   const ps = pixelSize;
-  const m = margin + ps / 2;
+  // 小像素模式：坐标对齐整数像素，避免亚像素模糊导致线条变粗
+  const alignToGrid = ps <= 2;
+  const m = alignToGrid
+    ? Math.round(margin + ps / 2)
+    : margin + ps / 2;
   const path = [];
 
   for (let x = m; x <= width - m + 0.5; x += ps) {
-    path.push({ x: Math.round(x), y: Math.round(m), side: 'top' });
+    path.push({ x: alignToGrid ? Math.round(x) : x, y: m, side: 'top' });
   }
   for (let y = m + ps; y <= height - m + 0.5; y += ps) {
-    path.push({ x: Math.round(width - m), y: Math.round(y), side: 'right' });
+    path.push({ x: width - m, y: alignToGrid ? Math.round(y) : y, side: 'right' });
   }
   for (let x = width - m - ps; x >= m - 0.5; x -= ps) {
-    path.push({ x: Math.round(x), y: Math.round(height - m), side: 'bottom' });
+    path.push({ x: alignToGrid ? Math.round(x) : x, y: height - m, side: 'bottom' });
   }
   for (let y = height - m - ps; y >= m + ps - 0.5; y -= ps) {
-    path.push({ x: Math.round(m), y: Math.round(y), side: 'left' });
+    path.push({ x: m, y: alignToGrid ? Math.round(y) : y, side: 'left' });
   }
 
   return path;
@@ -352,12 +356,15 @@ function drawTrail(path, percent, pixelSize) {
   const headBlockIndex = Math.floor((percent / 100) * totalBlocks);
   const opacity = 0.06 * fadeOpacity;
   const half = pixelSize / 2;
+  const snap = pixelSize <= 2;
 
   ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
   for (let i = headBlockIndex + 1; i < totalBlocks; i += 2) {
     const p = path[i];
     if (p) {
-      ctx.fillRect(p.x - half, p.y - half, pixelSize, pixelSize);
+      const tx = snap ? Math.round(p.x - half) : p.x - half;
+      const ty = snap ? Math.round(p.y - half) : p.y - half;
+      ctx.fillRect(tx, ty, pixelSize, pixelSize);
     }
   }
 }
@@ -365,13 +372,14 @@ function drawTrail(path, percent, pixelSize) {
 function drawSnakeBody(blocks, pixelSize) {
   const gap = pixelSize >= 4 ? 1 : 0;
   const blockSize = Math.max(1, pixelSize - gap);
-  const halfBlock = blockSize / 2;
   const tiny = pixelSize <= 2; // 小像素模式：无摆动
+  // 小像素时对齐整数网格，避免亚像素抗锯齿导致线条变粗
+  const snap = tiny;
 
   for (const block of blocks) {
     let dx = 0, dy = 0;
     if (!tiny) {
-      const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * 1;
+      const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
       if (block.side === 'top' || block.side === 'bottom') {
         dy = wiggle;
       } else {
@@ -386,22 +394,16 @@ function drawSnakeBody(blocks, pixelSize) {
       const headRgb = hexToRgb(config.appearance.headColor);
       ctx.shadowColor = `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0.8)`;
       ctx.shadowBlur = 6;
-      ctx.fillRect(
-        block.x - halfHead + dx,
-        block.y - halfHead + dy,
-        headSize,
-        headSize
-      );
+      const hx = snap ? Math.round(block.x - halfHead + dx) : block.x - halfHead + dx;
+      const hy = snap ? Math.round(block.y - halfHead + dy) : block.y - halfHead + dy;
+      ctx.fillRect(hx, hy, headSize, headSize);
       ctx.shadowColor = 'transparent';
       ctx.shadowBlur = 0;
     } else {
       ctx.fillStyle = getBlockColor(block);
-      ctx.fillRect(
-        block.x - halfBlock + dx,
-        block.y - halfBlock + dy,
-        blockSize,
-        blockSize
-      );
+      const bx = snap ? Math.round(block.x - blockSize / 2 + dx) : block.x - blockSize / 2 + dx;
+      const by = snap ? Math.round(block.y - blockSize / 2 + dy) : block.y - blockSize / 2 + dy;
+      ctx.fillRect(bx, by, blockSize, blockSize);
     }
   }
 }
