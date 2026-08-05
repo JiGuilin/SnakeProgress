@@ -444,7 +444,11 @@ function bindEvents() {
 
   // 恢复默认
   els.resetBtn.addEventListener('click', async () => {
-    if (confirm('确定要恢复默认设置吗？所有自定义配置将被清除。')) {
+    const confirmed = await showConfirmModal(
+      '确定要恢复默认设置吗？',
+      '所有自定义配置将被清除'
+    );
+    if (confirmed) {
       try {
         config = await invoke('reset_config');
         updateUIFromConfig();
@@ -476,6 +480,41 @@ function bindEvents() {
   // 颜色实时预览进度条
   els.snakeColor.addEventListener('input', () => {
     els.previewBar.style.background = els.snakeColor.value;
+  });
+}
+
+// ============ 自定义确认弹窗 ============
+
+function showConfirmModal(message, sub) {
+  return new Promise((resolve) => {
+    const overlay = document.getElementById('modalOverlay');
+    const msgEl = document.getElementById('modalMessage');
+    const subEl = document.getElementById('modalSub');
+    const confirmBtn = document.getElementById('modalConfirm');
+    const cancelBtn = document.getElementById('modalCancel');
+
+    if (msgEl) msgEl.textContent = message || '确定要执行此操作吗？';
+    if (subEl) subEl.textContent = sub || '';
+
+    overlay.classList.add('visible');
+
+    function cleanup(result) {
+      overlay.classList.remove('visible');
+      confirmBtn.removeEventListener('click', onConfirm);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onOverlayClick);
+      resolve(result);
+    }
+
+    function onConfirm() { cleanup(true); }
+    function onCancel() { cleanup(false); }
+    function onOverlayClick(e) {
+      if (e.target === overlay) cleanup(false);
+    }
+
+    confirmBtn.addEventListener('click', onConfirm);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onOverlayClick);
   });
 }
 

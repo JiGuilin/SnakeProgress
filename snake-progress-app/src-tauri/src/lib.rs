@@ -451,9 +451,16 @@ pub fn run() {
                     let config = click_app.state::<AppState>().config.lock().unwrap().clone();
 
                     if config.display.click_through {
-                        // 开启穿透 → 始终穿透，不切换
+                        // 开启穿透 → 但如果有弹窗打开，临时关闭穿透
+                        if detail_or_about_open(&click_app) {
+                            if let Some(window) = click_app.get_webview_window("main") {
+                                let _ = window.set_ignore_cursor_events(false);
+                            }
+                            was_near_edge = true;
+                            continue;
+                        }
+                        // 确保穿透状态
                         if !was_near_edge {
-                            // 确保穿透状态
                             if let Some(window) = click_app.get_webview_window("main") {
                                 let _ = window.set_ignore_cursor_events(true);
                             }

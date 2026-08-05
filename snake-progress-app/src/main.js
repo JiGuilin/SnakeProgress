@@ -1065,36 +1065,37 @@ function showAboutDialog() {
   aboutOverlay.style.cssText = `
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(0,0,0,0.5); display: flex; align-items: center;
-    justify-content: center; z-index: 100000; backdrop-filter: blur(4px);
+    justify-content: center; z-index: 100000;
   `;
 
   const dialog = document.createElement('div');
   dialog.style.cssText = `
-    background: #1a1a2e; color: #e0e0e0; border-radius: 16px;
-    padding: 32px; text-align: center; min-width: 300px;
-    border: 1px solid rgba(139,233,253,0.2);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    background: #161b22; color: #b1bac4; border-radius: 14px;
+    padding: 28px 32px; text-align: center; min-width: 300px;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    pointer-events: auto; position: relative; z-index: 1;
   `;
 
   const content = document.createElement('div');
   content.innerHTML = `
     <div style="font-size: 36px; margin-bottom: 12px;">🐍</div>
-    <h2 style="margin: 0 0 8px; color: #8be9fd; font-size: 20px;">SnakeProgress</h2>
-    <p style="margin: 0 0 4px; color: #999; font-size: 13px;">桌面贪吃蛇进度条 v0.1.0</p>
-    <p style="margin: 0 0 16px; color: #666; font-size: 12px;">把时间进度变成屏幕边框的一部分</p>
-    <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; margin-top: 8px;">
-      <p style="margin: 0 0 4px; color: #888; font-size: 11px;">💻 Windows / macOS / Linux</p>
-      <p style="margin: 0 0 4px; color: #888; font-size: 11px;">🏗️ Built with Tauri + Canvas 2D</p>
-      <p style="margin: 0 0 4px; color: #888; font-size: 11px;">🔒 纯本地运行，无网络请求</p>
+    <h2 style="margin: 0 0 8px; color: #e6edf3; font-size: 20px; font-weight: 600; letter-spacing: -0.01em;">SnakeProgress</h2>
+    <p style="margin: 0 0 4px; color: #8b949e; font-size: 13px;">桌面贪吃蛇进度条 v0.1.0</p>
+    <p style="margin: 0 0 16px; color: #6e7681; font-size: 12px;">把时间进度变成屏幕边框的一部分</p>
+    <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 8px;">
+      <p style="margin: 0 0 4px; color: #8b949e; font-size: 11px;">💻 Windows / macOS / Linux</p>
+      <p style="margin: 0 0 4px; color: #8b949e; font-size: 11px;">🏗️ Built with Tauri + Canvas 2D</p>
+      <p style="margin: 0 0 4px; color: #8b949e; font-size: 11px;">🔒 纯本地运行，无网络请求</p>
     </div>
   `;
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '确定';
   closeBtn.style.cssText = `
-    margin-top: 16px; padding: 8px 24px; border: none; border-radius: 8px;
-    background: #8be9fd; color: #1a1a2e; font-size: 13px; cursor: pointer;
-    font-weight: 600;
+    margin-top: 16px; padding: 8px 24px; border: none; border-radius: 6px;
+    background: #c4a882; color: #fff; font-size: 13px; cursor: pointer;
+    font-weight: 600; user-select: auto; -webkit-user-select: auto;
   `;
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();

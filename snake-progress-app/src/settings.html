@@ -362,6 +362,21 @@
     </footer>
   </div>
 
+  <!-- 自定义确认弹窗 -->
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal-dialog">
+      <div class="modal-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 4v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="14" r="1" fill="currentColor"/></svg>
+      </div>
+      <p class="modal-message" id="modalMessage">确定要恢复默认设置吗？</p>
+      <p class="modal-sub" id="modalSub">所有自定义配置将被清除</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modalCancel" type="button">取消</button>
+        <button class="btn btn-danger" id="modalConfirm" type="button">确认恢复</button>
+      </div>
+    </div>
+  </div>
+
   <script src="settings.js"></script>
 </body>
 </html>
