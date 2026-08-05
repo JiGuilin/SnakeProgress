@@ -37,6 +37,20 @@ let tooltipTimer = null;
 let mouseX = -9999;
 let mouseY = -9999;
 
+// 定时获取全局鼠标位置（穿透模式下 mousemove 不触发，需要从 Rust 端获取）
+setInterval(async () => {
+  try {
+    const [x, y] = await invoke('get_cursor_pos');
+    // get_cursor_pos 返回物理像素，需要转换为逻辑像素
+    // 使用 devicePixelRatio 或窗口尺寸与屏幕尺寸的比例换算
+    const dpr = window.devicePixelRatio || 1;
+    mouseX = x / dpr;
+    mouseY = y / dpr;
+  } catch (e) {
+    // fallback：如果获取失败，保持上次值
+  }
+}, 100);
+
 // 全屏检测
 let wasFullscreen = false;
 let fullscreenCheckInterval = null;
