@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SnakeProgress",
+  "version": "0.1.0",
+  "identifier": "com.snakeprogress.desktop",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "SnakeProgress",
+        "width": 1920,
+        "height": 1080,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "maximized": true,
+        "visible": true,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "label": "settings",
+        "title": "贪吃蛇进度条设置",
+        "url": "/settings.html",
+        "width": 480,
+        "height": 680,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "resizable": false,
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

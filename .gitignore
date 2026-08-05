@@ -1,0 +1,18 @@
+# Build
+snake-progress-app/src-tauri/target/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Runtime
+*.log

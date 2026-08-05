@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>贪吃蛇进度条设置</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="settings-body">
+  <div class="settings-container">
+    <!-- 头部 -->
+    <div class="settings-header">
+      <div class="logo">🐍</div>
+      <h1>贪吃蛇进度条设置</h1>
+    </div>
+
+    <!-- 工作时间 -->
+    <div class="section">
+      <div class="section-title">📅 工作时间</div>
+      <div class="section-content">
+        <div class="form-row">
+          <label>上班时间</label>
+          <input type="time" id="workStart" value="09:00" />
+        </div>
+        <div class="form-row">
+          <label>下班时间</label>
+          <input type="time" id="workEnd" value="18:00" />
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="lunchEnabled" checked />
+          <label for="lunchEnabled">启用午休时段</label>
+        </div>
+        <div class="form-row lunch-row" id="lunchRow">
+          <label>午休时段</label>
+          <div class="time-pair">
+            <input type="time" id="lunchStart" value="12:00" />
+            <span class="time-separator">~</span>
+            <input type="time" id="lunchEnd" value="13:00" />
+          </div>
+        </div>
+        <div class="form-row">
+          <label>工作日</label>
+          <div class="weekdays" id="weekdays">
+            <button class="weekday-btn active" data-day="1">一</button>
+            <button class="weekday-btn active" data-day="2">二</button>
+            <button class="weekday-btn active" data-day="3">三</button>
+            <button class="weekday-btn active" data-day="4">四</button>
+            <button class="weekday-btn active" data-day="5">五</button>
+            <button class="weekday-btn" data-day="6">六</button>
+            <button class="weekday-btn" data-day="7">日</button>
+          </div>
+        </div>
+        <!-- 实时进度预览 -->
+        <div class="progress-preview">
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="previewBar" style="width: 0%; background: #00FF00;"></div>
+          </div>
+          <span class="progress-text" id="previewText">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 外观样式 -->
+    <div class="section">
+      <div class="section-title">🎨 外观样式</div>
+      <div class="section-content">
+        <div class="theme-grid" id="themeGrid"></div>
+        <div class="form-row">
+          <label>蛇身颜色</label>
+          <input type="color" id="snakeColor" value="#00FF00" />
+        </div>
+        <div class="form-row">
+          <label>蛇头颜色</label>
+          <input type="color" id="headColor" value="#FFFF00" />
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="rainbowMode" />
+          <label for="rainbowMode">彩虹模式</label>
+        </div>
+        <div class="form-row">
+          <label>像素大小</label>
+          <input type="range" id="pixelSize" min="1" max="20" step="1" value="8" />
+          <span class="range-value" id="pixelSizeVal">8px</span>
+        </div>
+        <div class="form-row">
+          <label>透明度</label>
+          <input type="range" id="opacity" min="0" max="100" step="5" value="80" />
+          <span class="range-value" id="opacityVal">80%</span>
+        </div>
+        <div class="form-row">
+          <label>边框边距</label>
+          <input type="range" id="margin" min="0" max="20" step="1" value="2" />
+          <span class="range-value" id="marginVal">2px</span>
+        </div>
+        <div class="form-row">
+          <label>长度模式</label>
+          <select id="snakeLengthMode">
+            <option value="trailing">尾随模式（蛇身=已完成进度）</option>
+            <option value="fixed">固定长度（蛇固定长度跟随进度）</option>
+          </select>
+        </div>
+        <div class="form-row" id="fixedLengthRow" style="display:none">
+          <label>固定长度比例</label>
+          <input type="range" id="fixedLengthPercent" min="10" max="50" step="5" value="20" />
+          <span class="range-value" id="fixedLengthPercentVal">20%</span>
+        </div>
+        <div class="form-row">
+          <label>动画速度</label>
+          <select id="animationSpeed">
+            <option value="slow">慢速</option>
+            <option value="normal" selected>正常</option>
+            <option value="fast">快速</option>
+          </select>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="showTrail" />
+          <label for="showTrail">显示未完成轨迹</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="headGlow" checked />
+          <label for="headGlow">蛇头发光效果</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 显示设置 -->
+    <div class="section">
+      <div class="section-title">🖥️ 显示设置</div>
+      <div class="section-content">
+        <div class="checkbox-row">
+          <input type="checkbox" id="autoHideFullscreen" checked />
+          <label for="autoHideFullscreen">全屏应用时自动隐藏</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="clickThrough" checked />
+          <label for="clickThrough">鼠标穿透（点击不拦截）</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="autoStart" checked />
+          <label for="autoStart">开机自启</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="showOnNonWorkdays" />
+          <label for="showOnNonWorkdays">非工作日也显示</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="celebrationEnabled" checked />
+          <label for="celebrationEnabled">完成庆祝动画</label>
+        </div>
+        <div class="form-row">
+          <label>快捷键</label>
+          <span style="color: #8be9fd; font-size: 13px; font-family: monospace;">Ctrl+Shift+S</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div class="section">
+      <div class="section-title">💾 数据管理</div>
+      <div class="section-content">
+        <div class="form-row">
+          <label>配置文件</label>
+          <span style="color: #666; font-size: 11px;" id="configPath">-</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button class="btn btn-default" id="exportBtn" style="flex:1;">📤 导出配置</button>
+          <button class="btn btn-default" id="importBtn" style="flex:1;">📥 导入配置</button>
+        </div>
+        <input type="file" id="importFileInput" accept=".json" style="display:none" />
+      </div>
+    </div>
+
+    <!-- 底部按钮 -->
+    <div class="footer">
+      <button class="btn btn-default" id="resetBtn">恢复默认</button>
+      <button class="btn btn-primary" id="saveBtn">保存并关闭</button>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
