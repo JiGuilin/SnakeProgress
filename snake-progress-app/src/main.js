@@ -946,6 +946,11 @@ async function setupEventListeners() {
     showAboutDialog();
   });
 
+  await listen('show-detail', () => {
+    // 从托盘菜单触发，弹窗放在右上角
+    showDetailDialog(window.innerWidth - 270, 40);
+  });
+
   await listen('clock-event', (event) => {
     const data = event.payload;
     showClockNotification(data.type, data.time);

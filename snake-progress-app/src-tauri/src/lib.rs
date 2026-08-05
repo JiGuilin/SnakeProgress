@@ -352,10 +352,12 @@ pub fn run() {
             }
             let settings_item = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
             let separator1 = PredefinedMenuItem::separator(app)?;
-            let autostart_item = CheckMenuItem::with_id(app, "autostart", "开机自启", true, true, None::<&str>)?;
+            let detail_item = MenuItem::with_id(app, "detail", "📊 详细信息", true, None::<&str>)?;
             let clock_in_item = MenuItem::with_id(app, "clock_in", "📍 上班打卡", true, None::<&str>)?;
             let clock_out_item = MenuItem::with_id(app, "clock_out", "🏠 下班打卡", true, None::<&str>)?;
             let separator2 = PredefinedMenuItem::separator(app)?;
+            let autostart_item = CheckMenuItem::with_id(app, "autostart", "开机自启", true, true, None::<&str>)?;
+            let separator3 = PredefinedMenuItem::separator(app)?;
             let about_item = MenuItem::with_id(app, "about", "关于 SnakeProgress", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
 
@@ -363,10 +365,12 @@ pub fn run() {
                 &show_item,
                 &settings_item,
                 &separator1,
-                &autostart_item,
+                &detail_item,
                 &clock_in_item,
                 &clock_out_item,
                 &separator2,
+                &autostart_item,
+                &separator3,
                 &about_item,
                 &quit_item,
             ])?;
@@ -380,6 +384,9 @@ pub fn run() {
                     match event.id.as_ref() {
                         "show" => {
                             toggle_window_visibility(app);
+                        }
+                        "detail" => {
+                            let _ = app.emit("show-detail", ());
                         }
                         "settings" => {
                             if let Some(window) = app.get_webview_window("settings") {
