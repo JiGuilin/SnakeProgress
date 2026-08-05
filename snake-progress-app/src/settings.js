@@ -54,6 +54,25 @@ const els = {
   configPath: $('configPath'),
 };
 
+// ============ Toggle 工具方法 ============
+
+/** 获取 toggle 的开关状态 */
+function isToggleOn(el) {
+  return el.getAttribute('aria-checked') === 'true';
+}
+
+/** 设置 toggle 的开关状态 */
+function setToggle(el, on) {
+  el.setAttribute('aria-checked', on ? 'true' : 'false');
+}
+
+/** 切换 toggle 并返回新状态 */
+function toggleSwitch(el) {
+  const newVal = !isToggleOn(el);
+  setToggle(el, newVal);
+  return newVal;
+}
+
 // ============ 主题预设 ============
 
 async function loadThemes() {
@@ -69,9 +88,10 @@ async function loadThemes() {
 function renderThemeGrid() {
   els.themeGrid.innerHTML = '';
   for (const theme of themes) {
-    const card = document.createElement('div');
+    const card = document.createElement('button');
     card.className = 'theme-card' + (config && config.appearance.theme === theme.name ? ' active' : '');
     card.dataset.name = theme.name;
+    card.type = 'button';
 
     const preview = document.createElement('div');
     preview.className = 'theme-preview';
@@ -121,10 +141,10 @@ function updateUIFromConfig() {
 
   els.workStart.value = wt.start;
   els.workEnd.value = wt.end;
-  els.lunchEnabled.checked = wt.lunch.enabled;
+  setToggle(els.lunchEnabled, wt.lunch.enabled);
   els.lunchStart.value = wt.lunch.start;
   els.lunchEnd.value = wt.lunch.end;
-  els.lunchRow.style.display = wt.lunch.enabled ? 'flex' : 'none';
+  els.lunchRow.style.display = wt.lunch.enabled ? 'grid' : 'none';
 
   document.querySelectorAll('.weekday-btn').forEach((btn) => {
     const day = parseInt(btn.dataset.day);
@@ -133,7 +153,7 @@ function updateUIFromConfig() {
 
   els.snakeColor.value = ap.snakeColor.startsWith('#') ? ap.snakeColor.substring(0, 7) : '#00FF00';
   els.headColor.value = ap.headColor.startsWith('#') ? ap.headColor.substring(0, 7) : '#FFFF00';
-  els.rainbowMode.checked = ap.rainbowMode;
+  setToggle(els.rainbowMode, ap.rainbowMode);
   els.pixelSize.value = ap.pixelSize;
   els.pixelSizeVal.textContent = ap.pixelSize + 'px';
   els.opacity.value = ap.opacity;
@@ -145,17 +165,17 @@ function updateUIFromConfig() {
   els.fixedLengthPercent.value = ap.fixedLengthPercent;
   els.fixedLengthPercentVal.textContent = ap.fixedLengthPercent + '%';
   els.animationSpeed.value = ap.animationSpeed;
-  els.showTrail.checked = ap.showTrail;
-  els.headGlow.checked = ap.headGlow;
-  els.straightMode.checked = ap.straightMode;
+  setToggle(els.showTrail, ap.showTrail);
+  setToggle(els.headGlow, ap.headGlow);
+  setToggle(els.straightMode, ap.straightMode);
   els.headShape.value = ap.headShape || 'triangle';
   els.skinTexture.value = ap.skinTexture || 'solid';
 
-  els.autoHideFullscreen.checked = dp.autoHideFullscreen;
-  els.clickThrough.checked = dp.clickThrough;
-  els.autoStart.checked = dp.autoStart;
-  els.showOnNonWorkdays.checked = dp.showOnNonWorkdays;
-  els.celebrationEnabled.checked = ce.enabled;
+  setToggle(els.autoHideFullscreen, dp.autoHideFullscreen);
+  setToggle(els.clickThrough, dp.clickThrough);
+  setToggle(els.autoStart, dp.autoStart);
+  setToggle(els.showOnNonWorkdays, dp.showOnNonWorkdays);
+  setToggle(els.celebrationEnabled, ce.enabled);
 
   document.querySelectorAll('.theme-card').forEach((card) => {
     card.classList.toggle('active', card.dataset.name === ap.theme);
@@ -176,7 +196,7 @@ function collectConfigFromUI() {
       start: els.workStart.value,
       end: els.workEnd.value,
       lunch: {
-        enabled: els.lunchEnabled.checked,
+        enabled: isToggleOn(els.lunchEnabled),
         start: els.lunchStart.value,
         end: els.lunchEnd.value,
       },
@@ -187,30 +207,30 @@ function collectConfigFromUI() {
       snakeColor: els.snakeColor.value,
       headColor: els.headColor.value,
       colorMode: config ? config.appearance.colorMode : 'solid',
-      rainbowMode: els.rainbowMode.checked,
+      rainbowMode: isToggleOn(els.rainbowMode),
       pixelSize: parseInt(els.pixelSize.value),
       opacity: parseInt(els.opacity.value),
       margin: parseInt(els.margin.value),
       snakeLengthMode: els.snakeLengthMode.value,
       fixedLengthPercent: parseInt(els.fixedLengthPercent.value),
       animationSpeed: els.animationSpeed.value,
-      showTrail: els.showTrail.checked,
-      headGlow: els.headGlow.checked,
-      straightMode: els.straightMode.checked,
+      showTrail: isToggleOn(els.showTrail),
+      headGlow: isToggleOn(els.headGlow),
+      straightMode: isToggleOn(els.straightMode),
       headShape: els.headShape.value,
       skinTexture: els.skinTexture.value,
     },
     display: {
       monitor: config ? config.display.monitor : 'primary',
-      autoHideFullscreen: els.autoHideFullscreen.checked,
-      clickThrough: els.clickThrough.checked,
-      autoStart: els.autoStart.checked,
-      showOnNonWorkdays: els.showOnNonWorkdays.checked,
+      autoHideFullscreen: isToggleOn(els.autoHideFullscreen),
+      clickThrough: isToggleOn(els.clickThrough),
+      autoStart: isToggleOn(els.autoStart),
+      showOnNonWorkdays: isToggleOn(els.showOnNonWorkdays),
       nonWorkdayStyle: config ? config.display.nonWorkdayStyle : 'hidden',
     },
     shortcut: config ? config.shortcut : { toggleVisibility: 'Ctrl+Shift+S' },
     celebration: {
-      enabled: els.celebrationEnabled.checked,
+      enabled: isToggleOn(els.celebrationEnabled),
       duration: config ? config.celebration.duration : 3000,
       celebrationType: config ? config.celebration.celebrationType : 'fireworks',
     },
@@ -319,7 +339,7 @@ async function handleImportFile(event) {
       config = result;
       updateUIFromConfig();
       notifyConfigChanged();
-      alert('配置导入成功！');
+      alert('配置导入成功');
     }
   } catch (e) {
     alert('配置导入失败: ' + e);
@@ -331,10 +351,40 @@ async function handleImportFile(event) {
 // ============ 事件绑定 ============
 
 function bindEvents() {
-  // 午休开关
-  els.lunchEnabled.addEventListener('change', () => {
-    els.lunchRow.style.display = els.lunchEnabled.checked ? 'flex' : 'none';
-    debouncedSave();
+  // Tab 导航切换
+  const tabNav = document.getElementById('tabNav');
+  if (tabNav) {
+    tabNav.addEventListener('click', (e) => {
+      const btn = e.target.closest('.tab-btn');
+      if (!btn) return;
+      const tabId = btn.dataset.tab;
+      // 更新 tab 按钮状态
+      tabNav.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      // 更新 section 显示
+      document.querySelectorAll('.settings-section').forEach((sec) => sec.classList.remove('active'));
+      const targetSection = document.getElementById(tabId);
+      if (targetSection) targetSection.classList.add('active');
+    });
+  }
+
+  // Toggle 开关 - 统一绑定所有 toggle-switch
+  const toggleEls = [
+    els.lunchEnabled, els.rainbowMode, els.showTrail, els.headGlow,
+    els.straightMode, els.autoHideFullscreen, els.clickThrough,
+    els.autoStart, els.showOnNonWorkdays, els.celebrationEnabled,
+  ];
+
+  toggleEls.forEach((el) => {
+    if (!el) return;
+    el.addEventListener('click', () => {
+      toggleSwitch(el);
+      // 午休开关需要联动
+      if (el === els.lunchEnabled) {
+        els.lunchRow.style.display = isToggleOn(el) ? 'grid' : 'none';
+      }
+      debouncedSave();
+    });
   });
 
   // 长度模式切换
@@ -373,13 +423,11 @@ function bindEvents() {
     debouncedSave();
   });
 
-  // 自动保存的输入项
+  // 自动保存的输入项 (非 toggle 的 input/select)
   const autoSaveInputs = [
     els.workStart, els.workEnd, els.lunchStart, els.lunchEnd,
-    els.snakeColor, els.headColor, els.rainbowMode,
-    els.animationSpeed, els.showTrail, els.headGlow, els.straightMode, els.headShape, els.skinTexture,
-    els.autoHideFullscreen, els.clickThrough, els.autoStart,
-    els.showOnNonWorkdays, els.celebrationEnabled,
+    els.snakeColor, els.headColor,
+    els.animationSpeed, els.headShape, els.skinTexture,
   ];
 
   autoSaveInputs.forEach((el) => {
@@ -431,6 +479,24 @@ function bindEvents() {
   });
 }
 
+// ============ 设置面板主题切换 ============
+
+const SETTINGS_THEME_KEY = 'sp-settings-theme';
+
+function applySettingsTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem(SETTINGS_THEME_KEY, theme);
+}
+
+function getSavedSettingsTheme() {
+  return localStorage.getItem(SETTINGS_THEME_KEY) || 'dark';
+}
+
+function toggleSettingsTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  applySettingsTheme(current === 'dark' ? 'light' : 'dark');
+}
+
 // ============ 主入口 ============
 
 async function init() {
@@ -439,9 +505,18 @@ async function init() {
   bindEvents();
   updateProgressPreview();
 
+  // 恢复主题
+  applySettingsTheme(getSavedSettingsTheme());
+
+  // 绑定主题切换按钮
+  const themeToggleBtn = document.getElementById('settingsThemeToggle');
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener('click', toggleSettingsTheme);
+  }
+
   // 显示配置文件路径
   try {
-    const path = await invoke('get_config');
+    await invoke('get_config');
     els.configPath.textContent = '%APPDATA%\\SnakeProgress\\config.json';
   } catch (e) {
     // ignore

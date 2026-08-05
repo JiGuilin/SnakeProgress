@@ -28,12 +28,13 @@
         "label": "settings",
         "title": "贪吃蛇进度条设置",
         "url": "/settings.html",
-        "width": 480,
-        "height": 680,
+        "width": 620,
+        "height": 560,
         "decorations": true,
         "transparent": false,
         "alwaysOnTop": false,
         "resizable": false,
+        "maximizable": false,
         "center": true,
         "visible": false
       }
