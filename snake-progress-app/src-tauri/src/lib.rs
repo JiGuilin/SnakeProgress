@@ -599,17 +599,17 @@ fn update_tray_tooltip(app: &tauri::AppHandle) {
     let remaining = progress.remaining_minutes;
     let hours = remaining / 60;
     let mins = remaining % 60;
-    let percent = (progress.percent * 100.0).round() / 100.0; // 保留2位小数
+    let percent = (progress.percent * 1000.0).round() / 1000.0; // 保留3位小数
 
     let tooltip = if progress.status == "NonWorkday" {
         "SnakeProgress - 非工作日".to_string()
     } else if progress.status == "AfterWork" {
         "SnakeProgress - 已完成 🎉".to_string()
     } else if progress.is_lunch_break {
-        format!("SnakeProgress - 工作进度 {:.2}% · 🌙午休中", percent)
+        format!("SnakeProgress - 工作进度 {:.3}% · 🌙午休中", percent)
     } else {
         format!(
-            "SnakeProgress - 工作进度 {:.2}% · 剩余 {}h {}min",
+            "SnakeProgress - 工作进度 {:.3}% · 剩余 {}h {}min",
             percent, hours, mins
         )
     };

@@ -47,6 +47,12 @@ const els = {
   randomFoodEnabled: $('randomFoodEnabled'),
   randomFoodInterval: $('randomFoodInterval'),
   randomFoodIntervalVal: $('randomFoodIntervalVal'),
+  randomFoodRangeMin: $('randomFoodRangeMin'),
+  randomFoodRangeMinVal: $('randomFoodRangeMinVal'),
+  randomFoodRangeMax: $('randomFoodRangeMax'),
+  randomFoodRangeMaxVal: $('randomFoodRangeMaxVal'),
+  randomFoodMaxCount: $('randomFoodMaxCount'),
+  randomFoodMaxCountVal: $('randomFoodMaxCountVal'),
   displayMode: $('displayMode'),
   startPosition: $('startPosition'),
   direction: $('direction'),
@@ -195,6 +201,12 @@ els.tailAnimEffect.value = ap.tailAnimEffect || 'none';
   setToggle(els.randomFoodEnabled, ap.randomFoodEnabled !== undefined ? ap.randomFoodEnabled : true);
   els.randomFoodInterval.value = ap.randomFoodInterval || 15;
   els.randomFoodIntervalVal.textContent = els.randomFoodInterval.value + 's';
+  els.randomFoodRangeMin.value = ap.randomFoodRangeMin ?? 0.5;
+  els.randomFoodRangeMinVal.textContent = parseFloat(els.randomFoodRangeMin.value).toFixed(1) + '%';
+  els.randomFoodRangeMax.value = ap.randomFoodRangeMax ?? 5;
+  els.randomFoodRangeMaxVal.textContent = parseFloat(els.randomFoodRangeMax.value).toFixed(1) + '%';
+  els.randomFoodMaxCount.value = ap.randomFoodMaxCount ?? 5;
+  els.randomFoodMaxCountVal.textContent = els.randomFoodMaxCount.value;
   els.displayMode.value = ap.displayMode || 'full';
   els.startPosition.value = ap.startPosition || 'top-left';
   els.direction.value = ap.direction || 'clockwise';
@@ -254,6 +266,9 @@ function collectConfigFromUI() {
       showPowerUps: isToggleOn(els.showPowerUps),
       randomFoodEnabled: isToggleOn(els.randomFoodEnabled),
       randomFoodInterval: parseInt(els.randomFoodInterval.value),
+      randomFoodRangeMin: parseFloat(els.randomFoodRangeMin.value),
+      randomFoodRangeMax: parseFloat(els.randomFoodRangeMax.value),
+      randomFoodMaxCount: parseInt(els.randomFoodMaxCount.value),
       displayMode: els.displayMode.value,
       startPosition: els.startPosition.value,
       direction: els.direction.value,
@@ -339,7 +354,7 @@ function calcRealtimePercent() {
 }
 
 function updateProgressPreview() {
-  const percent = calcRealtimePercent().toFixed(2);
+  const percent = calcRealtimePercent().toFixed(3);
   els.previewBar.style.width = percent + '%';
   els.previewBar.style.background = els.snakeColor.value || '#00FF00';
   els.previewText.textContent = percent + '%';
@@ -464,6 +479,21 @@ function bindEvents() {
 
   els.randomFoodInterval.addEventListener('input', () => {
     els.randomFoodIntervalVal.textContent = els.randomFoodInterval.value + 's';
+    debouncedSave();
+  });
+
+  els.randomFoodRangeMin.addEventListener('input', () => {
+    els.randomFoodRangeMinVal.textContent = parseFloat(els.randomFoodRangeMin.value).toFixed(1) + '%';
+    debouncedSave();
+  });
+
+  els.randomFoodRangeMax.addEventListener('input', () => {
+    els.randomFoodRangeMaxVal.textContent = parseFloat(els.randomFoodRangeMax.value).toFixed(1) + '%';
+    debouncedSave();
+  });
+
+  els.randomFoodMaxCount.addEventListener('input', () => {
+    els.randomFoodMaxCountVal.textContent = els.randomFoodMaxCount.value;
     debouncedSave();
   });
 

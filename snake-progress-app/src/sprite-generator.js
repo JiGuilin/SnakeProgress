@@ -889,7 +889,7 @@ class RandomFoodSystem {
     this.spriteGen = spriteGenerator;
     this.foods = []; // 当前存活的食物列表
     this.eatAnimations = []; // 吃食物动画
-    this.lastSpawnTime = 0; // 上次生成时间
+    this.lastSpawnTime = Date.now(); // 上次生成时间，初始化为当前时间避免启动时立刻生成
     this.foodTypes = ['apple', 'cherry', 'star', 'mushroom', 'clock', 'diamond', 'lightning', 'heart'];
     this.totalCollected = 0; // 总共吃掉的食物数
   }
@@ -900,7 +900,7 @@ class RandomFoodSystem {
   reset() {
     this.foods = [];
     this.eatAnimations = [];
-    this.lastSpawnTime = 0;
+    this.lastSpawnTime = Date.now();
     this.totalCollected = 0;
   }
 
@@ -910,17 +910,20 @@ class RandomFoodSystem {
    * @param {number} pathLength - 路径总长度（块数）
    * @param {number} intervalSec - 生成间隔（秒）
    * @param {number} pixelSize - 像素大小
+   * @param {number} rangeMin - 生成范围最小值（百分比）
+   * @param {number} rangeMax - 生成范围最大值（百分比）
+   * @param {number} maxCount - 同时存在的最大食物数量
    */
-  trySpawn(currentPercent, pathLength, intervalSec, pixelSize) {
+  trySpawn(currentPercent, pathLength, intervalSec, pixelSize, rangeMin, rangeMax, maxCount) {
     const now = Date.now();
     const intervalMs = intervalSec * 1000;
     if (now - this.lastSpawnTime < intervalMs) return;
     if (pathLength === 0) return;
+    // 限制同时存在的食物数量
+    if (this.foods.length >= maxCount) return;
 
-    // 在蛇头前方 3%~15% 进度处生成食物
-    const lookAheadMin = 3;
-    const lookAheadMax = 15;
-    const lookAhead = lookAheadMin + Math.random() * (lookAheadMax - lookAheadMin);
+    // 在蛇头前方指定范围处生成食物
+    const lookAhead = rangeMin + Math.random() * (rangeMax - rangeMin);
     const foodPercent = currentPercent + lookAhead;
 
     // 超过100%不生成
@@ -928,7 +931,7 @@ class RandomFoodSystem {
 
     // 检查是否与已有食物太近
     for (const f of this.foods) {
-      if (Math.abs(f.percent - foodPercent) < 2) return;
+      if (Math.abs(f.percent - foodPercent) < 0.2) return;
     }
 
     const type = this.foodTypes[Math.floor(Math.random() * this.foodTypes.length)];
@@ -946,9 +949,44 @@ class RandomFoodSystem {
    * @param {number} currentPercent - 当前进度
    */
   checkCollection(currentPercent) {
+    // 碰撞容差：蛇头接近食物 0.05% 范围内即触发
+    const tolerance = 0.05;
     for (let i = this.foods.length - 1; i >= 0; i--) {
       const f = this.foods[i];
-      if (currentPercent >= f.percent) {
+      if (currentPercent >= f.percent - tolerance) {
+        // 吃到了
+        this.eatAnimations.push({
+          percent: f.percent,
+          type: f.type,
+          startTime: Date.now(),
+          duration: 800,
+        });
+        this.foods.splice(i, 1);
+        this.totalCollected++;
+      }
+    }
+  }
+
+  /**
+   * 检查蛇头是否吃到食物（基于像素位置碰撞检测）
+   * @param {Object} headBlock - 蛇头块 {x, y}
+   * @param {Array} path - 蛇身路径
+   * @param {number} pixelSize - 像素大小
+   */
+  checkCollectionByPosition(headBlock, path, pixelSize) {
+    const collisionRange = pixelSize * 1.5; // 碰撞范围
+    const now = Date.now();
+    for (let i = this.foods.length - 1; i >= 0; i--) {
+      const f = this.foods[i];
+      // 保护期：刚生成的食物 500ms 内不可被碰撞，避免一帧内立刻消失
+      if (now - f.spawnTime < 500) continue;
+      const idx = Math.floor((f.percent / 100) * path.length);
+      if (idx >= path.length) continue;
+      const pos = path[idx];
+      const dx = headBlock.x - pos.x;
+      const dy = headBlock.y - pos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= collisionRange) {
         // 吃到了
         this.eatAnimations.push({
           percent: f.percent,

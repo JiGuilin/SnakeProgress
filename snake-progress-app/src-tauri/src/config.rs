@@ -11,6 +11,9 @@ fn default_start_position() -> String { "top-left".to_string() }
 fn default_direction() -> String { "clockwise".to_string() }
 fn default_display_mode() -> String { "full".to_string() }
 fn default_random_food_interval() -> u32 { 15 }
+fn default_random_food_range_min() -> f64 { 0.5 }
+fn default_random_food_range_max() -> f64 { 5.0 }
+fn default_random_food_max_count() -> u32 { 5 }
 
 /// 应用配置结构体，与需求文档 §7.1 一致
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,6 +82,12 @@ pub struct Appearance {
     pub random_food_enabled: bool, // 随机食物开关
     #[serde(default = "default_random_food_interval")]
     pub random_food_interval: u32, // 随机食物生成间隔（秒）
+    #[serde(default = "default_random_food_range_min")]
+    pub random_food_range_min: f64, // 食物生成范围最小值（百分比）
+    #[serde(default = "default_random_food_range_max")]
+    pub random_food_range_max: f64, // 食物生成范围最大值（百分比）
+    #[serde(default = "default_random_food_max_count")]
+    pub random_food_max_count: u32, // 同时存在的最大食物数量
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -146,6 +155,9 @@ impl Default for AppConfig {
                 display_mode: "full".to_string(),
                 random_food_enabled: true,
                 random_food_interval: 15,
+                random_food_range_min: 0.5,
+                random_food_range_max: 5.0,
+                random_food_max_count: 5,
             },
             display: Display {
                 monitor: "primary".to_string(),

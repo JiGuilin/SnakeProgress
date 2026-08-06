@@ -190,6 +190,7 @@ function getDefaultConfig() {
       showPowerUps: true, bodyAnimEffect: 'none', headAnimEffect: 'none', tailAnimEffect: 'none',
       startPosition: 'top-left', direction: 'clockwise', displayMode: 'full',
       randomFoodEnabled: true, randomFoodInterval: 15,
+      randomFoodRangeMin: 0.5, randomFoodRangeMax: 5, randomFoodMaxCount: 5,
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -490,10 +491,16 @@ function render(timestamp) {
   const randomFoodEnabled = config.appearance.randomFoodEnabled !== false;
   if (randomFoodEnabled) {
     const foodInterval = config.appearance.randomFoodInterval || 15;
-    // 尝试生成新食物
-    randomFoodSystem.trySpawn(percent, path.length, foodInterval, pixelSize);
-    // 检查是否吃到食物
-    randomFoodSystem.checkCollection(percent);
+    // 先检查是否吃到食物（基于蛇头像素位置）
+    if (blocks.length > 0) {
+      const headBlock = blocks[blocks.length - 1];
+      randomFoodSystem.checkCollectionByPosition(headBlock, path, pixelSize);
+    }
+    // 再尝试生成新食物
+    const foodRangeMin = config.appearance.randomFoodRangeMin ?? 0.5;
+    const foodRangeMax = config.appearance.randomFoodRangeMax ?? 5;
+    const foodMaxCount = config.appearance.randomFoodMaxCount ?? 5;
+    randomFoodSystem.trySpawn(percent, path.length, foodInterval, pixelSize, foodRangeMin, foodRangeMax, foodMaxCount);
     // 绘制食物
     randomFoodSystem.drawFoods(ctx, path, pixelSize, percent, fadeOpacity);
     // 绘制吃食物粒子动画
@@ -1171,7 +1178,7 @@ function drawStatusText(w, h) {
   // 工作中：在蛇头旁显示实时进度
   if (progressInfo.status === 'Working' || progressInfo.isLunchBreak) {
     const percent = calcRealtimePercent();
-    const percentText = percent.toFixed(2) + '%';
+    const percentText = percent.toFixed(3) + '%';
     ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * fadeOpacity})`;
     ctx.font = 'bold 11px "Segoe UI", "Microsoft YaHei", sans-serif';
     ctx.textAlign = 'center';
@@ -1277,7 +1284,7 @@ canvas.addEventListener('mousemove', (e) => {
       statusText = '等待上班';
     }
 
-    tooltip.textContent = `工作进度 ${Math.round(percent)}%${statusText ? ' · ' + statusText : ''}`;
+    tooltip.textContent = `工作进度 ${percent.toFixed(3)}%${statusText ? ' · ' + statusText : ''}`;
     tooltip.style.left = (e.clientX + 12) + 'px';
     tooltip.style.top = (e.clientY - 30) + 'px';
     tooltip.classList.add('visible');
@@ -1399,7 +1406,7 @@ function showDetailDialog(clickX, clickY) {
       <span style="font-size:12px;color:#888;">${timeStr}</span>
     </div>
     <div style="text-align:center;margin-bottom:16px;">
-      <div style="font-size:32px;font-weight:bold;color:#4FC3F7;">${percent.toFixed(1)}%</div>
+      <div style="font-size:32px;font-weight:bold;color:#4FC3F7;">${percent.toFixed(3)}%</div>
       <div style="margin-top:6px;height:6px;background:rgba(255,255,255,0.1);border-radius:3px;overflow:hidden;">
         <div style="width:${percent}%;height:100%;background:linear-gradient(90deg,#4FC3F7,#00E676);border-radius:3px;"></div>
       </div>

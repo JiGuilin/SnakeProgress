@@ -341,10 +341,35 @@
           </div>
 
           <div class="field" id="randomFoodIntervalRow">
-            <label class="field-label" for="randomFoodInterval">食物间隔</label>
+            <label class="field-label" for="randomFoodInterval">食物生成间隔</label>
             <div class="range-field">
               <input class="range-input" type="range" id="randomFoodInterval" min="5" max="60" step="5" value="15" />
               <span class="range-value" id="randomFoodIntervalVal">15s</span>
+            </div>
+          </div>
+
+          <div class="field-group">
+            <div class="field">
+              <label class="field-label" for="randomFoodRangeMin">生成范围(近)</label>
+              <div class="range-field">
+                <input class="range-input" type="range" id="randomFoodRangeMin" min="0.1" max="10" step="0.1" value="0.5" />
+                <span class="range-value" id="randomFoodRangeMinVal">0.5%</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="randomFoodRangeMax">生成范围(远)</label>
+              <div class="range-field">
+                <input class="range-input" type="range" id="randomFoodRangeMax" min="1" max="30" step="0.5" value="5" />
+                <span class="range-value" id="randomFoodRangeMaxVal">5%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="randomFoodMaxCount">最大食物数量</label>
+            <div class="range-field">
+              <input class="range-input" type="range" id="randomFoodMaxCount" min="1" max="20" step="1" value="5" />
+              <span class="range-value" id="randomFoodMaxCountVal">5</span>
             </div>
           </div>
         </div>
