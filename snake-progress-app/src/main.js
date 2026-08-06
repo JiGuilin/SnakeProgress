@@ -183,6 +183,7 @@ function getDefaultConfig() {
       fixedLengthPercent: 20, animationSpeed: 'normal',
       showTrail: false, headGlow: true, straightMode: false, bodyMotionMode: 'wiggle', headShape: 'triangle', skinTexture: 'solid',
       showPowerUps: true, bodyAnimEffect: 'none', headAnimEffect: 'none', tailAnimEffect: 'none',
+      startPosition: 'top-left', direction: 'clockwise', displayMode: 'full',
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -202,26 +203,122 @@ function getDefaultConfig() {
  */
 function calculateBorderPath(width, height, margin, pixelSize) {
   const ps = pixelSize;
-  // 小像素模式：坐标对齐整数像素，避免亚像素模糊导致线条变粗
   const alignToGrid = ps <= 2;
   const m = alignToGrid
     ? Math.round(margin + ps / 2)
     : margin + ps / 2;
-  const path = [];
 
+  const startPos = (config.appearance.startPosition) || 'top-left';
+  const direction = (config.appearance.direction) || 'clockwise';
+  const displayMode = (config.appearance.displayMode) || 'full';
+
+  // 单边模式：由起始位置+方向决定具体在哪条边
+  if (displayMode === 'single') {
+    return calculateSingleSidePath(width, height, m, ps, alignToGrid, startPos, direction);
+  }
+
+  // 全屏模式：生成四边路径
+  // 先生成四条边的点数组
+  const top = [], right = [], bottom = [], left = [];
   for (let x = m; x <= width - m + 0.5; x += ps) {
-    path.push({ x: alignToGrid ? Math.round(x) : x, y: m, side: 'top' });
+    top.push({ x: alignToGrid ? Math.round(x) : x, y: m, side: 'top' });
   }
   for (let y = m + ps; y <= height - m + 0.5; y += ps) {
-    path.push({ x: width - m, y: alignToGrid ? Math.round(y) : y, side: 'right' });
+    right.push({ x: width - m, y: alignToGrid ? Math.round(y) : y, side: 'right' });
   }
   for (let x = width - m - ps; x >= m - 0.5; x -= ps) {
-    path.push({ x: alignToGrid ? Math.round(x) : x, y: height - m, side: 'bottom' });
+    bottom.push({ x: alignToGrid ? Math.round(x) : x, y: height - m, side: 'bottom' });
   }
   for (let y = height - m - ps; y >= m + ps - 0.5; y -= ps) {
-    path.push({ x: m, y: alignToGrid ? Math.round(y) : y, side: 'left' });
+    left.push({ x: m, y: alignToGrid ? Math.round(y) : y, side: 'left' });
   }
 
+  // 根据起始位置和方向排列四条边的顺序
+  // 顺时针边顺序映射
+  const cwOrder = {
+    'top-left':    ['top', 'right', 'bottom', 'left'],
+    'top-right':   ['right', 'bottom', 'left', 'top'],
+    'bottom-right':['bottom', 'left', 'top', 'right'],
+    'bottom-left': ['left', 'top', 'right', 'bottom'],
+  };
+  // 逆时针边顺序映射
+  const ccwOrder = {
+    'top-left':    ['left', 'bottom', 'right', 'top'],
+    'top-right':   ['top', 'left', 'bottom', 'right'],
+    'bottom-right':['right', 'top', 'left', 'bottom'],
+    'bottom-left': ['bottom', 'right', 'top', 'left'],
+  };
+
+  const orderMap = direction === 'counterclockwise' ? ccwOrder : cwOrder;
+  const order = orderMap[startPos] || cwOrder['top-left'];
+  const sideMap = { top, right, bottom, left };
+
+  // 逆时针时，每条边的点需要反转（因为行进方向相反）
+  const path = [];
+  for (const side of order) {
+    const points = sideMap[side];
+    if (direction === 'counterclockwise') {
+      // 逆时针：反转每条边的点序，并修正 side 标记
+      for (let i = points.length - 1; i >= 0; i--) {
+        path.push({ ...points[i] });
+      }
+    } else {
+      for (const p of points) {
+        path.push({ ...p });
+      }
+    }
+  }
+
+  return path;
+}
+
+/**
+ * 计算单边模式的路径
+ * 起始位置+方向决定具体在哪条边及行进方向：
+ *   顺时针：top-left→上(左→右), top-right→右(上→下), bottom-right→下(右→左), bottom-left→左(下→上)
+ *   逆时针：top-left→左(上→下), top-right→上(右→左), bottom-right→右(下→上), bottom-left→下(左→右)
+ */
+function calculateSingleSidePath(width, height, m, ps, alignToGrid, startPos, direction) {
+  const path = [];
+  const addPoint = (x, y, s) => path.push({ x: alignToGrid ? Math.round(x) : x, y: alignToGrid ? Math.round(y) : y, side: s });
+
+  // 推导出具体边和行进方向
+  const cwMap = {
+    'top-left':    { side: 'top',    forward: true  }, // 上边 左→右
+    'top-right':   { side: 'right',  forward: true  }, // 右边 上→下
+    'bottom-right':{ side: 'bottom', forward: false }, // 下边 右→左
+    'bottom-left': { side: 'left',   forward: false }, // 左边 下→上
+  };
+  const ccwMap = {
+    'top-left':    { side: 'left',   forward: true  }, // 左边 上→下
+    'top-right':   { side: 'top',    forward: false }, // 上边 右→左
+    'bottom-right':{ side: 'right',  forward: false }, // 右边 下→上
+    'bottom-left': { side: 'bottom', forward: true  }, // 下边 左→右
+  };
+
+  const map = direction === 'counterclockwise' ? ccwMap : cwMap;
+  const cfg = map[startPos] || cwMap['top-left'];
+  const side = cfg.side;
+  const forward = cfg.forward;
+
+  switch (side) {
+    case 'top':
+      if (forward) { for (let x = m; x <= width - m + 0.5; x += ps) addPoint(x, m, 'top'); }
+      else         { for (let x = width - m; x >= m - 0.5; x -= ps) addPoint(x, m, 'top'); }
+      break;
+    case 'right':
+      if (forward) { for (let y = m; y <= height - m + 0.5; y += ps) addPoint(width - m, y, 'right'); }
+      else         { for (let y = height - m; y >= m - 0.5; y -= ps) addPoint(width - m, y, 'right'); }
+      break;
+    case 'bottom':
+      if (forward) { for (let x = m; x <= width - m + 0.5; x += ps) addPoint(x, height - m, 'bottom'); }
+      else         { for (let x = width - m; x >= m - 0.5; x -= ps) addPoint(x, height - m, 'bottom'); }
+      break;
+    case 'left':
+      if (forward) { for (let y = m; y <= height - m + 0.5; y += ps) addPoint(m, y, 'left'); }
+      else         { for (let y = height - m; y >= m - 0.5; y -= ps) addPoint(m, y, 'left'); }
+      break;
+  }
   return path;
 }
 
@@ -789,8 +886,12 @@ function drawSpriteHead(headBlock, headSize, dx, dy, variant) {
   const cx = headBlock.x + dx + followDx;
   const cy = headBlock.y + dy + followDy;
   // side 是蛇身所在边，需转换为蛇的前进方向
+  const isCCW = (config.appearance.direction) === 'counterclockwise';
   // 顺时针：top→右, right→下, bottom→左, left→上
-  const sideToDir = { top: 'right', right: 'bottom', bottom: 'left', left: 'top' };
+  // 逆时针：top→左, left→下, bottom→右, right→上
+  const sideToDirCW = { top: 'right', right: 'bottom', bottom: 'left', left: 'top' };
+  const sideToDirCCW = { top: 'left', left: 'bottom', bottom: 'right', right: 'top' };
+  const sideToDir = isCCW ? sideToDirCCW : sideToDirCW;
   const direction = sideToDir[headBlock.side] || 'right';
   const headColor = config.appearance.headColor;
 
@@ -930,18 +1031,27 @@ function drawHead(headBlock, headSize, dx, dy) {
   const shape = config.appearance.headShape || 'triangle';
 
   // 根据边框位置确定前进方向
-  // top→右, right→下, bottom→左, left→上
-  const side = headBlock.side;
+  // 顺时针：top→右, right→下, bottom→左, left→上
+  // 逆时针：top→左, left→下, bottom→右, right→上
+  const isCCW = (config.appearance.direction) === 'counterclockwise';
+  const sideToDirCW = { top: 'right', right: 'bottom', bottom: 'left', left: 'top' };
+  const sideToDirCCW = { top: 'left', left: 'bottom', bottom: 'right', right: 'top' };
+  const sideToDir = isCCW ? sideToDirCCW : sideToDirCW;
+  const dir = sideToDir[headBlock.side] || 'right';
 
   if (shape === 'triangle') {
     let p1x, p1y, p2x, p2y, p3x, p3y;
-    if (side === 'top') {
+    if (dir === 'right') {
+      // 朝右：顶点在右
       p1x = cx + half; p1y = cy; p2x = cx - half; p2y = cy - half; p3x = cx - half; p3y = cy + half;
-    } else if (side === 'right') {
+    } else if (dir === 'bottom') {
+      // 朝下：顶点在下
       p1x = cx; p1y = cy + half; p2x = cx - half; p2y = cy - half; p3x = cx + half; p3y = cy - half;
-    } else if (side === 'bottom') {
+    } else if (dir === 'left') {
+      // 朝左：顶点在左
       p1x = cx - half; p1y = cy; p2x = cx + half; p2y = cy - half; p3x = cx + half; p3y = cy + half;
     } else {
+      // 朝上：顶点在上
       p1x = cx; p1y = cy - half; p2x = cx - half; p2y = cy + half; p3x = cx + half; p3y = cy + half;
     }
     ctx.beginPath();
@@ -957,7 +1067,7 @@ function drawHead(headBlock, headSize, dx, dy) {
     const shortSide = headSize;
     const halfLong = longSide / 2;
     const halfShort = shortSide / 2;
-    if (side === 'top' || side === 'bottom') {
+    if (dir === 'right' || dir === 'left') {
       ctx.fillRect(cx - halfLong, cy - halfShort, longSide, shortSide);
     } else {
       ctx.fillRect(cx - halfShort, cy - halfLong, shortSide, longSide);
@@ -975,13 +1085,13 @@ function drawHead(headBlock, headSize, dx, dy) {
     // 菱形：前进方向拉长
     const longHalf = half * 1.3;
     let top, right, bottom, left;
-    if (side === 'top') {
+    if (dir === 'right') {
       top = { x: cx + longHalf, y: cy }; right = { x: cx, y: cy - half };
       bottom = { x: cx - longHalf, y: cy }; left = { x: cx, y: cy + half };
-    } else if (side === 'right') {
+    } else if (dir === 'bottom') {
       top = { x: cx, y: cy + longHalf }; right = { x: cx - half, y: cy };
       bottom = { x: cx, y: cy - longHalf }; left = { x: cx + half, y: cy };
-    } else if (side === 'bottom') {
+    } else if (dir === 'left') {
       top = { x: cx - longHalf, y: cy }; right = { x: cx, y: cy - half };
       bottom = { x: cx + longHalf, y: cy }; left = { x: cx, y: cy + half };
     } else {

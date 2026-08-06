@@ -7,6 +7,9 @@ use std::path::PathBuf;
 fn default_true() -> bool { true }
 fn default_body_anim() -> String { "none".to_string() }
 fn default_body_motion() -> String { "wiggle".to_string() }
+fn default_start_position() -> String { "top-left".to_string() }
+fn default_direction() -> String { "clockwise".to_string() }
+fn default_display_mode() -> String { "full".to_string() }
 
 /// 应用配置结构体，与需求文档 §7.1 一致
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +68,12 @@ pub struct Appearance {
     pub head_anim_effect: String, // none, nod, bob, wobble, shake, bounce
     #[serde(default = "default_body_anim")]
     pub tail_anim_effect: String, // none, swish, curl, pulse, flame, flow
+    #[serde(default = "default_start_position")]
+    pub start_position: String, // top-left, top-right, bottom-left, bottom-right
+    #[serde(default = "default_direction")]
+    pub direction: String, // clockwise, counterclockwise
+    #[serde(default = "default_display_mode")]
+    pub display_mode: String, // full, single (单边模式下由 start_position 决定具体边)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +136,9 @@ impl Default for AppConfig {
                 body_anim_effect: "none".to_string(),
                 head_anim_effect: "none".to_string(),
                 tail_anim_effect: "none".to_string(),
+                start_position: "top-left".to_string(),
+                direction: "clockwise".to_string(),
+                display_mode: "full".to_string(),
             },
             display: Display {
                 monitor: "primary".to_string(),

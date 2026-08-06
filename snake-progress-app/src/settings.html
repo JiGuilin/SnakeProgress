@@ -333,6 +333,34 @@
       <!-- 显示设置 -->
       <section class="settings-section" id="sectionDisplay">
         <div class="section-body">
+          <div class="field">
+            <label class="field-label" for="displayMode">显示模式</label>
+            <select class="field-select" id="displayMode">
+              <option value="full" selected>全屏</option>
+              <option value="single">单边</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="startPosition">起始位置</label>
+            <select class="field-select" id="startPosition">
+              <option value="top-left" selected>左上角</option>
+              <option value="top-right">右上角</option>
+              <option value="bottom-left">左下角</option>
+              <option value="bottom-right">右下角</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="direction">运动方向</label>
+            <select class="field-select" id="direction">
+              <option value="clockwise" selected>顺时针</option>
+              <option value="counterclockwise">逆时针</option>
+            </select>
+          </div>
+
+          <div class="field-divider"></div>
+
           <div class="toggle-field">
             <label class="toggle-label" for="autoHideFullscreen">
               <span class="toggle-text">全屏时自动隐藏</span>

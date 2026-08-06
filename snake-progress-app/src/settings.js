@@ -44,6 +44,9 @@ const els = {
   headShape: $('headShape'),
   skinTexture: $('skinTexture'),
   showPowerUps: $('showPowerUps'),
+  displayMode: $('displayMode'),
+  startPosition: $('startPosition'),
+  direction: $('direction'),
   autoHideFullscreen: $('autoHideFullscreen'),
   clickThrough: $('clickThrough'),
   autoStart: $('autoStart'),
@@ -186,6 +189,9 @@ els.tailAnimEffect.value = ap.tailAnimEffect || 'none';
   els.headShape.value = ap.headShape || 'triangle';
   els.skinTexture.value = ap.skinTexture || 'solid';
   setToggle(els.showPowerUps, ap.showPowerUps !== undefined ? ap.showPowerUps : true);
+  els.displayMode.value = ap.displayMode || 'full';
+  els.startPosition.value = ap.startPosition || 'top-left';
+  els.direction.value = ap.direction || 'clockwise';
 
   setToggle(els.autoHideFullscreen, dp.autoHideFullscreen);
   setToggle(els.clickThrough, dp.clickThrough);
@@ -240,6 +246,9 @@ function collectConfigFromUI() {
       headShape: els.headShape.value,
       skinTexture: els.skinTexture.value,
       showPowerUps: isToggleOn(els.showPowerUps),
+      displayMode: els.displayMode.value,
+      startPosition: els.startPosition.value,
+      direction: els.direction.value,
     },
     display: {
       monitor: config ? config.display.monitor : 'primary',
@@ -454,6 +463,9 @@ function bindEvents() {
 els.headAnimEffect,
 els.tailAnimEffect,
 els.bodyMotionMode,
+els.displayMode,
+els.startPosition,
+els.direction,
   ];
 
   autoSaveInputs.forEach((el) => {
