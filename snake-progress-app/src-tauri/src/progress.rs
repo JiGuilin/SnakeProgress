@@ -88,11 +88,14 @@ pub fn calculate_progress(
     let start_minutes = parse_time_to_minutes(work_start).unwrap_or(540); // 09:00
     let end_minutes = parse_time_to_minutes(work_end).unwrap_or(1080); // 18:00
 
-    // 计算午休时长
+    // 计算午休时长（仅计算落在工作时段内的午休时间）
     let lunch_start_minutes = parse_time_to_minutes(lunch_start).unwrap_or(720); // 12:00
     let lunch_end_minutes = parse_time_to_minutes(lunch_end).unwrap_or(780); // 13:00
     let lunch_duration = if lunch_enabled {
-        (lunch_end_minutes - lunch_start_minutes).max(0)
+        // 午休与工作时段的交集：max(lunch_start, work_start) ~ min(lunch_end, work_end)
+        let effective_start = lunch_start_minutes.max(start_minutes);
+        let effective_end = lunch_end_minutes.min(end_minutes);
+        (effective_end - effective_start).max(0)
     } else {
         0
     };
@@ -101,10 +104,11 @@ pub fn calculate_progress(
     let total_minutes = (end_minutes - start_minutes).max(0);
     let total_work_minutes = total_minutes - lunch_duration;
 
-    // 判断是否在午休
+    // 判断是否在午休（午休必须与工作时段有交集，且当前时间在有效午休范围内）
     let in_lunch = lunch_enabled
-        && current_total_minutes >= lunch_start_minutes
-        && current_total_minutes < lunch_end_minutes;
+        && lunch_duration > 0
+        && current_total_minutes >= lunch_start_minutes.max(start_minutes)
+        && current_total_minutes < lunch_end_minutes.min(end_minutes);
 
     // 上班前
     if current_total_minutes < start_minutes {
@@ -136,7 +140,7 @@ pub fn calculate_progress(
 
     // 午休中
     if in_lunch {
-        let elapsed_to_lunch = (lunch_start_minutes - start_minutes).max(0);
+        let elapsed_to_lunch = (lunch_start_minutes.max(start_minutes) - start_minutes).max(0);
         let percent = if total_work_minutes > 0 {
             (elapsed_to_lunch as f64 / total_work_minutes as f64) * 100.0
         } else {
@@ -158,8 +162,8 @@ pub fn calculate_progress(
     // 工作中
     let mut elapsed = current_total_minutes - start_minutes;
 
-    // 如果已过午休，扣除午休时长
-    if lunch_enabled && current_total_minutes >= lunch_end_minutes {
+    // 如果已过有效午休结束时间，扣除午休时长
+    if lunch_enabled && current_total_minutes >= lunch_end_minutes.min(end_minutes) {
         elapsed -= lunch_duration;
     }
 

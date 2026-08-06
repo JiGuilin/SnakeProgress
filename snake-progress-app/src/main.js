@@ -135,11 +135,13 @@ function calcRealtimePercent() {
   const startSec = parseTime(config.workTime.start);
   const endSec = parseTime(config.workTime.end);
 
-  // 午休
+  // 午休（仅计算落在工作时段内的午休时间）
   const lunchEnabled = config.workTime.lunch.enabled;
   const lunchStartSec = parseTime(config.workTime.lunch.start);
   const lunchEndSec = parseTime(config.workTime.lunch.end);
-  const lunchDuration = lunchEnabled ? Math.max(0, lunchEndSec - lunchStartSec) : 0;
+  const lunchDuration = lunchEnabled
+    ? Math.max(0, Math.min(lunchEndSec, endSec) - Math.max(lunchStartSec, startSec))
+    : 0;
 
   const totalSec = Math.max(0, endSec - startSec);
   const totalWorkSec = totalSec - lunchDuration;
@@ -152,15 +154,17 @@ function calcRealtimePercent() {
   // 下班后
   if (currentTotalSeconds >= endSec) return 100;
 
-  // 午休中
-  if (lunchEnabled && currentTotalSeconds >= lunchStartSec && currentTotalSeconds < lunchEndSec) {
-    const elapsedToLunch = Math.max(0, lunchStartSec - startSec);
+  // 午休中（仅在午休与工作时段有交集时才生效）
+  if (lunchEnabled && lunchDuration > 0
+      && currentTotalSeconds >= Math.max(lunchStartSec, startSec)
+      && currentTotalSeconds < Math.min(lunchEndSec, endSec)) {
+    const elapsedToLunch = Math.max(0, Math.max(lunchStartSec, startSec) - startSec);
     return (elapsedToLunch / totalWorkSec) * 100;
   }
 
   // 工作中
   let elapsed = currentTotalSeconds - startSec;
-  if (lunchEnabled && currentTotalSeconds >= lunchEndSec) {
+  if (lunchEnabled && currentTotalSeconds >= Math.min(lunchEndSec, endSec)) {
     elapsed -= lunchDuration;
   }
   elapsed = Math.max(0, elapsed);
