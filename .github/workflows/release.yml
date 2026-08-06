@@ -55,11 +55,12 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: snake-progress-app/package-lock.json
+          cache-dependency-path: snake-progress-app/package.json
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install frontend dependencies
         working-directory: snake-progress-app
-        run: npm install
+        run: npm install --registry=https://registry.npmjs.org
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2"

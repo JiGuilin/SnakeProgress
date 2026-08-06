@@ -44,6 +44,9 @@ const els = {
   headShape: $('headShape'),
   skinTexture: $('skinTexture'),
   showPowerUps: $('showPowerUps'),
+  randomFoodEnabled: $('randomFoodEnabled'),
+  randomFoodInterval: $('randomFoodInterval'),
+  randomFoodIntervalVal: $('randomFoodIntervalVal'),
   displayMode: $('displayMode'),
   startPosition: $('startPosition'),
   direction: $('direction'),
@@ -189,6 +192,9 @@ els.tailAnimEffect.value = ap.tailAnimEffect || 'none';
   els.headShape.value = ap.headShape || 'triangle';
   els.skinTexture.value = ap.skinTexture || 'solid';
   setToggle(els.showPowerUps, ap.showPowerUps !== undefined ? ap.showPowerUps : true);
+  setToggle(els.randomFoodEnabled, ap.randomFoodEnabled !== undefined ? ap.randomFoodEnabled : true);
+  els.randomFoodInterval.value = ap.randomFoodInterval || 15;
+  els.randomFoodIntervalVal.textContent = els.randomFoodInterval.value + 's';
   els.displayMode.value = ap.displayMode || 'full';
   els.startPosition.value = ap.startPosition || 'top-left';
   els.direction.value = ap.direction || 'clockwise';
@@ -246,6 +252,8 @@ function collectConfigFromUI() {
       headShape: els.headShape.value,
       skinTexture: els.skinTexture.value,
       showPowerUps: isToggleOn(els.showPowerUps),
+      randomFoodEnabled: isToggleOn(els.randomFoodEnabled),
+      randomFoodInterval: parseInt(els.randomFoodInterval.value),
       displayMode: els.displayMode.value,
       startPosition: els.startPosition.value,
       direction: els.direction.value,
@@ -403,7 +411,7 @@ function bindEvents() {
     els.lunchEnabled, els.rainbowMode, els.showTrail, els.headGlow,
     els.autoHideFullscreen, els.clickThrough,
     els.autoStart, els.showOnNonWorkdays, els.celebrationEnabled,
-    els.showPowerUps,
+    els.showPowerUps, els.randomFoodEnabled,
   ];
 
   toggleEls.forEach((el) => {
@@ -451,6 +459,11 @@ function bindEvents() {
 
   els.margin.addEventListener('input', () => {
     els.marginVal.textContent = els.margin.value + 'px';
+    debouncedSave();
+  });
+
+  els.randomFoodInterval.addEventListener('input', () => {
+    els.randomFoodIntervalVal.textContent = els.randomFoodInterval.value + 's';
     debouncedSave();
   });
 

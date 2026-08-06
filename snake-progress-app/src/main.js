@@ -15,6 +15,7 @@ const PROGRESS_UPDATE_INTERVAL = 30000; // 后端状态同步间隔（30秒）�
 // 像素素材系统
 const spriteGen = new SpriteGenerator();
 const powerUpSystem = new PowerUpSystem(spriteGen);
+const randomFoodSystem = new RandomFoodSystem(spriteGen);
 let lastMilestoneCheck = -1; // 上次检查里程碑的百分比
 
 // 动画状态
@@ -188,6 +189,7 @@ function getDefaultConfig() {
       showTrail: false, headGlow: true, straightMode: false, bodyMotionMode: 'wiggle', headShape: 'triangle', skinTexture: 'solid',
       showPowerUps: true, bodyAnimEffect: 'none', headAnimEffect: 'none', tailAnimEffect: 'none',
       startPosition: 'top-left', direction: 'clockwise', displayMode: 'full',
+      randomFoodEnabled: true, randomFoodInterval: 15,
     },
     display: {
       monitor: 'primary', autoHideFullscreen: true,
@@ -482,6 +484,20 @@ function render(timestamp) {
     }
     // 绘制吃食物动画
     powerUpSystem.drawEatAnimations(ctx, path, pixelSize, fadeOpacity);
+  }
+
+  // 随机食物系统
+  const randomFoodEnabled = config.appearance.randomFoodEnabled !== false;
+  if (randomFoodEnabled) {
+    const foodInterval = config.appearance.randomFoodInterval || 15;
+    // 尝试生成新食物
+    randomFoodSystem.trySpawn(percent, path.length, foodInterval, pixelSize);
+    // 检查是否吃到食物
+    randomFoodSystem.checkCollection(percent);
+    // 绘制食物
+    randomFoodSystem.drawFoods(ctx, path, pixelSize, percent, fadeOpacity);
+    // 绘制吃食物粒子动画
+    randomFoodSystem.drawEatAnimations(ctx, path, pixelSize, fadeOpacity);
   }
 
   // 午休变色效果

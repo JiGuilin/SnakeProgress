@@ -327,6 +327,26 @@
               </span>
             </button>
           </div>
+
+          <div class="toggle-field">
+            <label class="toggle-label" for="randomFoodEnabled">
+              <span class="toggle-text">随机食物</span>
+              <span class="toggle-hint">蛇头前方随机出现食物，经过时吃掉</span>
+            </label>
+            <button class="toggle-switch" id="randomFoodEnabled" role="switch" aria-checked="true" type="button">
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+            </button>
+          </div>
+
+          <div class="field" id="randomFoodIntervalRow">
+            <label class="field-label" for="randomFoodInterval">食物间隔</label>
+            <div class="range-field">
+              <input class="range-input" type="range" id="randomFoodInterval" min="5" max="60" step="5" value="15" />
+              <span class="range-value" id="randomFoodIntervalVal">15s</span>
+            </div>
+          </div>
         </div>
       </section>
 

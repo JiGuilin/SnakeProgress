@@ -10,6 +10,7 @@ fn default_body_motion() -> String { "wiggle".to_string() }
 fn default_start_position() -> String { "top-left".to_string() }
 fn default_direction() -> String { "clockwise".to_string() }
 fn default_display_mode() -> String { "full".to_string() }
+fn default_random_food_interval() -> u32 { 15 }
 
 /// 应用配置结构体，与需求文档 §7.1 一致
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +75,10 @@ pub struct Appearance {
     pub direction: String, // clockwise, counterclockwise
     #[serde(default = "default_display_mode")]
     pub display_mode: String, // full, single (单边模式下由 start_position 决定具体边)
+    #[serde(default = "default_true")]
+    pub random_food_enabled: bool, // 随机食物开关
+    #[serde(default = "default_random_food_interval")]
+    pub random_food_interval: u32, // 随机食物生成间隔（秒）
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +144,8 @@ impl Default for AppConfig {
                 start_position: "top-left".to_string(),
                 direction: "clockwise".to_string(),
                 display_mode: "full".to_string(),
+                random_food_enabled: true,
+                random_food_interval: 15,
             },
             display: Display {
                 monitor: "primary".to_string(),

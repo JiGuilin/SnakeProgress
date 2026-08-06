@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# npm lock file (generated locally, not committed to avoid private registry leakage)
+package-lock.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

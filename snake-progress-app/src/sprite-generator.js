@@ -880,6 +880,181 @@ class PowerUpSystem {
   }
 }
 
+/**
+ * RandomFoodSystem - 随机食物系统
+ * 在蛇头前方路径上随机生成食物，蛇经过时吃掉并触发粒子动画
+ */
+class RandomFoodSystem {
+  constructor(spriteGenerator) {
+    this.spriteGen = spriteGenerator;
+    this.foods = []; // 当前存活的食物列表
+    this.eatAnimations = []; // 吃食物动画
+    this.lastSpawnTime = 0; // 上次生成时间
+    this.foodTypes = ['apple', 'cherry', 'star', 'mushroom', 'clock', 'diamond', 'lightning', 'heart'];
+    this.totalCollected = 0; // 总共吃掉的食物数
+  }
+
+  /**
+   * 重置（新的一天）
+   */
+  reset() {
+    this.foods = [];
+    this.eatAnimations = [];
+    this.lastSpawnTime = 0;
+    this.totalCollected = 0;
+  }
+
+  /**
+   * 尝试生成一个随机食物
+   * @param {number} currentPercent - 当前进度
+   * @param {number} pathLength - 路径总长度（块数）
+   * @param {number} intervalSec - 生成间隔（秒）
+   * @param {number} pixelSize - 像素大小
+   */
+  trySpawn(currentPercent, pathLength, intervalSec, pixelSize) {
+    const now = Date.now();
+    const intervalMs = intervalSec * 1000;
+    if (now - this.lastSpawnTime < intervalMs) return;
+    if (pathLength === 0) return;
+
+    // 在蛇头前方 3%~15% 进度处生成食物
+    const lookAheadMin = 3;
+    const lookAheadMax = 15;
+    const lookAhead = lookAheadMin + Math.random() * (lookAheadMax - lookAheadMin);
+    const foodPercent = currentPercent + lookAhead;
+
+    // 超过100%不生成
+    if (foodPercent >= 100) return;
+
+    // 检查是否与已有食物太近
+    for (const f of this.foods) {
+      if (Math.abs(f.percent - foodPercent) < 2) return;
+    }
+
+    const type = this.foodTypes[Math.floor(Math.random() * this.foodTypes.length)];
+    this.foods.push({
+      percent: foodPercent,
+      type: type,
+      spawnTime: now,
+      bobPhase: Math.random() * Math.PI * 2,
+    });
+    this.lastSpawnTime = now;
+  }
+
+  /**
+   * 检查蛇头是否吃到食物
+   * @param {number} currentPercent - 当前进度
+   */
+  checkCollection(currentPercent) {
+    for (let i = this.foods.length - 1; i >= 0; i--) {
+      const f = this.foods[i];
+      if (currentPercent >= f.percent) {
+        // 吃到了
+        this.eatAnimations.push({
+          percent: f.percent,
+          type: f.type,
+          startTime: Date.now(),
+          duration: 800,
+        });
+        this.foods.splice(i, 1);
+        this.totalCollected++;
+      }
+    }
+  }
+
+  /**
+   * 绘制随机食物
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Array} path - 蛇身路径
+   * @param {number} pixelSize
+   * @param {number} currentPercent
+   * @param {number} fadeOpacity
+   */
+  drawFoods(ctx, path, pixelSize, currentPercent, fadeOpacity) {
+    if (!path || path.length === 0) return;
+
+    for (const f of this.foods) {
+      const idx = Math.floor((f.percent / 100) * path.length);
+      if (idx >= path.length) continue;
+
+      const pos = path[idx];
+      const itemSize = pixelSize * 1.4;
+      const sprite = this.spriteGen.generateItem(Math.round(itemSize), f.type);
+
+      // 悬浮 + 闪烁动画
+      const elapsed = (Date.now() - f.spawnTime) / 1000;
+      const bobOffset = Math.sin(Date.now() / 300 + f.bobPhase) * pixelSize * 0.3;
+      const blink = 0.7 + Math.sin(elapsed * 4) * 0.3;
+
+      // 光晕
+      ctx.globalAlpha = fadeOpacity * 0.3 * blink;
+      const glowSize = itemSize * 1.8;
+      const grad = ctx.createRadialGradient(pos.x, pos.y + bobOffset, 0, pos.x, pos.y + bobOffset, glowSize / 2);
+      grad.addColorStop(0, 'rgba(255, 220, 100, 0.4)');
+      grad.addColorStop(1, 'rgba(255, 220, 100, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(pos.x - glowSize / 2, pos.y + bobOffset - glowSize / 2, glowSize, glowSize);
+
+      // 食物本体
+      ctx.globalAlpha = fadeOpacity * blink;
+      ctx.drawImage(
+        sprite,
+        pos.x - itemSize / 2,
+        pos.y - itemSize / 2 + bobOffset,
+        itemSize,
+        itemSize
+      );
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  /**
+   * 绘制吃食物的粒子动画
+   */
+  drawEatAnimations(ctx, path, pixelSize, fadeOpacity) {
+    const now = Date.now();
+    this.eatAnimations = this.eatAnimations.filter(anim => {
+      const elapsed = now - anim.startTime;
+      if (elapsed > anim.duration) return false;
+
+      const progress = elapsed / anim.duration;
+      const idx = Math.floor((anim.percent / 100) * path.length);
+      if (idx >= path.length) return true;
+
+      const pos = path[idx];
+
+      // 爆裂粒子
+      const particleCount = 10;
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (i / particleCount) * Math.PI * 2 + anim.percent;
+        const dist = progress * pixelSize * 5;
+        const px = pos.x + Math.cos(angle) * dist;
+        const py = pos.y + Math.sin(angle) * dist;
+        const size = pixelSize * (1 - progress) * 0.7;
+        const alpha = (1 - progress) * fadeOpacity;
+
+        const hue = (i * 36 + anim.percent * 5) % 360;
+        ctx.fillStyle = `hsla(${hue}, 85%, 65%, ${alpha})`;
+        ctx.fillRect(px - size / 2, py - size / 2, size, size);
+      }
+
+      // 缩放消失
+      if (progress < 0.4) {
+        const scale = 1 + progress * 3;
+        const itemSize = pixelSize * 1.4 * scale;
+        const alpha = (1 - progress * 2.5) * fadeOpacity;
+        ctx.globalAlpha = Math.max(0, alpha);
+        const sprite = this.spriteGen.generateItem(Math.round(pixelSize * 1.4), anim.type);
+        ctx.drawImage(sprite, pos.x - itemSize / 2, pos.y - itemSize / 2, itemSize, itemSize);
+        ctx.globalAlpha = 1;
+      }
+
+      return true;
+    });
+  }
+}
+
 // 导出
 window.SpriteGenerator = SpriteGenerator;
 window.PowerUpSystem = PowerUpSystem;
+window.RandomFoodSystem = RandomFoodSystem;
