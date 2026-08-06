@@ -120,22 +120,36 @@ fn detail_or_about_open(app: &tauri::AppHandle) -> bool {
 
 #[tauri::command(name = "get_screen_size")]
 fn get_screen_size() -> (i32, i32) {
-    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
-    let w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
-    let h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
-    (w, h)
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+        let w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+        let h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+        (w, h)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        (1920, 1080) // 默认值，非 Windows 平台由前端自行获取
+    }
 }
 
 #[tauri::command(name = "get_cursor_pos")]
 fn get_cursor_pos() -> (i32, i32) {
-    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-    use windows::Win32::Foundation::POINT;
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        use windows::Win32::Foundation::POINT;
 
-    let mut point = POINT { x: 0, y: 0 };
-    unsafe {
-        let _ = GetCursorPos(&mut point);
+        let mut point = POINT { x: 0, y: 0 };
+        unsafe {
+            let _ = GetCursorPos(&mut point);
+        }
+        (point.x, point.y)
     }
-    (point.x, point.y)
+    #[cfg(not(target_os = "windows"))]
+    {
+        (0, 0)
+    }
 }
 
 #[tauri::command(name = "set_overlay_open")]
@@ -438,20 +452,41 @@ pub fn run() {
             // ======== 动态鼠标穿透切换 ========
             // click_through = true（开启穿透）→ 始终穿透，不弹窗
             // click_through = false（关闭穿透）→ 鼠标靠近边缘时临时关闭穿透，允许点击蛇身弹窗
-            let click_app = app.handle().clone();
-            std::thread::spawn(move || {
-                use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
-                use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
-                use windows::Win32::Foundation::POINT;
+            #[cfg(target_os = "windows")]
+            {
+                let click_app = app.handle().clone();
+                std::thread::spawn(move || {
+                    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+                    use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+                    use windows::Win32::Foundation::POINT;
 
-                let mut was_near_edge = false;
-                loop {
-                    std::thread::sleep(std::time::Duration::from_millis(80));
+                    let mut was_near_edge = false;
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(80));
 
-                    let config = click_app.state::<AppState>().config.lock().unwrap().clone();
+                        let config = click_app.state::<AppState>().config.lock().unwrap().clone();
 
-                    if config.display.click_through {
-                        // 开启穿透 → 但如果有弹窗打开，临时关闭穿透
+                        if config.display.click_through {
+                            // 开启穿透 → 但如果有弹窗打开，临时关闭穿透
+                            if detail_or_about_open(&click_app) {
+                                if let Some(window) = click_app.get_webview_window("main") {
+                                    let _ = window.set_ignore_cursor_events(false);
+                                }
+                                was_near_edge = true;
+                                continue;
+                            }
+                            // 确保穿透状态
+                            if !was_near_edge {
+                                if let Some(window) = click_app.get_webview_window("main") {
+                                    let _ = window.set_ignore_cursor_events(true);
+                                }
+                            }
+                            was_near_edge = false;
+                            continue;
+                        }
+
+                        // 关闭穿透 → 允许蛇身交互
+                        // 如果有弹窗打开，保持穿透关闭，不恢复
                         if detail_or_about_open(&click_app) {
                             if let Some(window) = click_app.get_webview_window("main") {
                                 let _ = window.set_ignore_cursor_events(false);
@@ -459,56 +494,38 @@ pub fn run() {
                             was_near_edge = true;
                             continue;
                         }
-                        // 确保穿透状态
-                        if !was_near_edge {
+
+                        let mut point = POINT { x: 0, y: 0 };
+                        let _ = unsafe { GetCursorPos(&mut point) };
+
+                        let margin = config.appearance.margin as i32;
+                        let pixel_size = config.appearance.pixel_size as i32;
+                        let threshold = margin + pixel_size * 3; // 蛇身附近的判定范围
+
+                        let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+                        let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+
+                        let near_edge = point.x <= threshold
+                            || point.y <= threshold
+                            || point.x >= screen_w - threshold
+                            || point.y >= screen_h - threshold;
+
+                        if near_edge && !was_near_edge {
+                            // 鼠标进入边缘 → 临时关闭穿透，让前端可以接收事件
+                            if let Some(window) = click_app.get_webview_window("main") {
+                                let _ = window.set_ignore_cursor_events(false);
+                            }
+                            was_near_edge = true;
+                        } else if !near_edge && was_near_edge {
+                            // 鼠标离开边缘 → 恢复穿透
                             if let Some(window) = click_app.get_webview_window("main") {
                                 let _ = window.set_ignore_cursor_events(true);
                             }
+                            was_near_edge = false;
                         }
-                        was_near_edge = false;
-                        continue;
                     }
-
-                    // 关闭穿透 → 允许蛇身交互
-                    // 如果有弹窗打开，保持穿透关闭，不恢复
-                    if detail_or_about_open(&click_app) {
-                        if let Some(window) = click_app.get_webview_window("main") {
-                            let _ = window.set_ignore_cursor_events(false);
-                        }
-                        was_near_edge = true;
-                        continue;
-                    }
-
-                    let mut point = POINT { x: 0, y: 0 };
-                    let _ = unsafe { GetCursorPos(&mut point) };
-
-                    let margin = config.appearance.margin as i32;
-                    let pixel_size = config.appearance.pixel_size as i32;
-                    let threshold = margin + pixel_size * 3; // 蛇身附近的判定范围
-
-                    let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
-                    let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
-
-                    let near_edge = point.x <= threshold
-                        || point.y <= threshold
-                        || point.x >= screen_w - threshold
-                        || point.y >= screen_h - threshold;
-
-                    if near_edge && !was_near_edge {
-                        // 鼠标进入边缘 → 临时关闭穿透，让前端可以接收事件
-                        if let Some(window) = click_app.get_webview_window("main") {
-                            let _ = window.set_ignore_cursor_events(false);
-                        }
-                        was_near_edge = true;
-                    } else if !near_edge && was_near_edge {
-                        // 鼠标离开边缘 → 恢复穿透
-                        if let Some(window) = click_app.get_webview_window("main") {
-                            let _ = window.set_ignore_cursor_events(true);
-                        }
-                        was_near_edge = false;
-                    }
-                }
-            });
+                });
+            }
 
             // ======== 托盘提示定时更新 ========
             let app_handle = app.handle().clone();
