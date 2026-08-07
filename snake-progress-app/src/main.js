@@ -26,6 +26,13 @@ let celebrationActive = false;
 let celebrationStart = 0;
 let lastCelebrationPercent = 0;
 
+// 蛇头光晕渐变缓存：避免每帧 createRadialGradient
+let cachedGlowGradient = null;
+let cachedGlowKey = '';
+
+// 庆祝粒子预生成的随机参数（避免每帧 Math.random 导致闪烁）
+let celebrationParticles = null;
+
 // 淡入淡出
 let fadeOpacity = 1.0;
 let fadeTarget = 1.0;
@@ -691,6 +698,11 @@ function drawSnakeBody(blocks, pixelSize) {
   const spriteBodyVariant = _skinTexture.startsWith('sprite_') ? _skinTexture.slice(7) : null;
   const useSpriteHead = spriteHeadVariant !== null;
   const useSpriteBody = spriteBodyVariant !== null;
+
+  // 循环外一次性提取 config 属性，避免每个 block 重复读取
+  const headAnim = config.appearance.headAnimEffect || 'none';
+  const tailAnim = config.appearance.tailAnimEffect || 'none';
+  const bodyAnim = config.appearance.bodyAnimEffect || 'none';
   // 尾部渐变缩小的点数：根据像素大小动态调整
   // 像素越大，蛇尾渐变越长（1px=0, 2px=0, 4px=5, 6px=7, 8px=9, 12px=13, 16px=17...）
   let tailTaperCount = 0;
@@ -754,7 +766,6 @@ function drawSnakeBody(blocks, pixelSize) {
     if (block.isHead && pixelSize > 2) {
       const headSize = pixelSize + 2;
       // 蛇头动画偏移
-      const headAnim = config.appearance.headAnimEffect || 'none';
       let headDx = 0, headDy = 0;
       if (headAnim !== 'none') {
         const headOff = calcHeadAnimOffset(block, pixelSize, headAnim);
@@ -768,7 +779,6 @@ function drawSnakeBody(blocks, pixelSize) {
       }
     } else {
       // 尾巴动画偏移
-      const tailAnim = config.appearance.tailAnimEffect || 'none';
       let tailDx = 0, tailDy = 0, tailScale = 1;
       if (tailAnim !== 'none' && tailTaperCount > 0 && bodyPos < tailTaperCount) {
         const tailOff = calcTailAnimOffset(block, bIdx, tailTaperCount, pixelSize, tailAnim);
@@ -799,7 +809,6 @@ function drawSnakeBody(blocks, pixelSize) {
       }
 
       // 蛇身动画效果叠加
-      const bodyAnim = config.appearance.bodyAnimEffect || 'none';
       if (bodyAnim !== 'none') {
         drawBodyAnimEffect(bx, by, scaledSize, block, bIdx, totalBlocks, bodyAnim);
       }
@@ -1278,16 +1287,20 @@ function drawHeadGlow(headBlock, pixelSize, timestamp) {
   const glowIntensity = (0.3 + Math.sin(headGlowPhase) * 0.2) * fadeOpacity;
   const glowSize = pixelSize * 3;
 
-  const gradient = ctx.createRadialGradient(
-    headBlock.x, headBlock.y, pixelSize / 2,
-    headBlock.x, headBlock.y, glowSize
-  );
-
   const headRgb = hexToRgb(config.appearance.headColor);
-  gradient.addColorStop(0, `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, ${glowIntensity})`);
-  gradient.addColorStop(1, `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0)`);
+  // 缓存 key：位置量化到 1px + 颜色 + 强度量化到 2 位小数
+  const glowKey = `${Math.round(headBlock.x)},${Math.round(headBlock.y)},${headRgb.r},${headRgb.g},${headRgb.b},${glowIntensity.toFixed(2)},${glowSize}`;
+  if (glowKey !== cachedGlowKey) {
+    cachedGlowGradient = ctx.createRadialGradient(
+      headBlock.x, headBlock.y, pixelSize / 2,
+      headBlock.x, headBlock.y, glowSize
+    );
+    cachedGlowGradient.addColorStop(0, `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, ${glowIntensity})`);
+    cachedGlowGradient.addColorStop(1, `rgba(${headRgb.r}, ${headRgb.g}, ${headRgb.b}, 0)`);
+    cachedGlowKey = glowKey;
+  }
 
-  ctx.fillStyle = gradient;
+  ctx.fillStyle = cachedGlowGradient;
   ctx.fillRect(
     headBlock.x - glowSize,
     headBlock.y - glowSize,
@@ -1364,23 +1377,36 @@ function drawCelebration(timestamp, w, h) {
 
   if (elapsed > duration) {
     celebrationActive = false;
+    celebrationParticles = null;
     return;
   }
 
   const progress = elapsed / duration;
   const particleCount = 50;
 
+  // 首次调用时预生成随机参数，后续帧复用，避免每帧 Math.random 导致粒子闪烁
+  if (!celebrationParticles) {
+    celebrationParticles = [];
+    for (let i = 0; i < particleCount; i++) {
+      celebrationParticles.push({
+        size: 3 + Math.random() * 4,
+        speedVar: Math.random() * 0.5, // 速度随机偏移
+        angleOffset: (i / particleCount) * Math.PI * 2,
+      });
+    }
+  }
+
   for (let i = 0; i < particleCount; i++) {
-    const angle = (i / particleCount) * Math.PI * 2 + progress * 3;
-    const speed = 50 + progress * 200;
+    const p = celebrationParticles[i];
+    const angle = p.angleOffset + progress * 3;
+    const speed = 50 + progress * 200 * (1 + p.speedVar);
     const x = w / 2 + Math.cos(angle) * speed * progress;
     const y = h / 2 + Math.sin(angle) * speed * progress - progress * 100;
-    const size = 3 + Math.random() * 4;
     const hue = (i * 30 + progress * 360) % 360;
     const alpha = (1 - progress) * fadeOpacity;
 
     ctx.fillStyle = `hsla(${hue}, 100%, 60%, ${alpha})`;
-    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+    ctx.fillRect(x - p.size / 2, y - p.size / 2, p.size, p.size);
   }
 }
 
@@ -1391,8 +1417,10 @@ canvas.addEventListener('mousemove', (e) => {
   mouseY = e.clientY;
   if (!config || !progressInfo) return;
 
-  const { pixelSize, margin } = config.appearance;
-  const path = calculateBorderPath(window.innerWidth, window.innerHeight, margin, pixelSize);
+  const { pixelSize } = config.appearance;
+  // 复用 render 中已缓存的路径，避免每次 mousemove 重建数千点的数组
+  const path = cachedPath;
+  if (!path) return;
   const percent = calcRealtimePercent();
   const blocks = getSnakeBlocks(percent, path);
 
@@ -1858,6 +1886,7 @@ async function updateProgress() {
   ) {
     celebrationActive = true;
     celebrationStart = performance.now();
+    celebrationParticles = null; // 重置粒子，下次 drawCelebration 时重新生成
   }
   lastCelebrationPercent = currentPercent;
 }
