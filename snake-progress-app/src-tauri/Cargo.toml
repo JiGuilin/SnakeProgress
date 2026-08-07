@@ -1,6 +1,6 @@
 [package]
 name = "snake-progress-app"
-version = "0.1.0"
+version = "0.2.0"
 description = "SnakeProgress - 桌面贪吃蛇进度条"
 authors = ["SnakeProgress Team"]
 edition = "2021"

@@ -1969,7 +1969,7 @@ function showAboutDialog() {
   content.innerHTML = `
     <div style="font-size: 36px; margin-bottom: 12px;">🐍</div>
     <h2 style="margin: 0 0 8px; color: #e6edf3; font-size: 20px; font-weight: 600; letter-spacing: -0.01em;">SnakeProgress</h2>
-    <p style="margin: 0 0 4px; color: #8b949e; font-size: 13px;">桌面贪吃蛇进度条 v0.1.0</p>
+    <p style="margin: 0 0 4px; color: #8b949e; font-size: 13px;">桌面贪吃蛇进度条 v0.2.0</p>
     <p style="margin: 0 0 16px; color: #6e7681; font-size: 12px;">把时间进度变成屏幕边框的一部分</p>
     <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 12px; margin-top: 8px;">
       <p style="margin: 0 0 4px; color: #8b949e; font-size: 11px;">💻 Windows / macOS / Linux</p>
