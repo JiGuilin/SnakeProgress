@@ -31,8 +31,15 @@ let fadeOpacity = 1.0;
 let fadeTarget = 1.0;
 const FADE_SPEED = 0.05;
 
-// 帧率限制
-const TARGET_FPS = 30;
+// 蛇身生成动画：从 0% 生长到实际进度
+let spawnAnimActive = false;
+let spawnAnimPercent = 0;       // 动画当前显示的百分比
+let spawnAnimTargetPercent = 0; // 动画目标百分比（实际进度）
+const SPAWN_ANIM_DURATION = 10.0; // 生成动画持续时间（秒）
+let spawnAnimStartTime = 0;     // 动画开始时间戳
+
+// 帧率限制（60fps 让蛇身移动更平滑）
+const TARGET_FPS = 60;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
 let lastFrameTime = 0;
 
@@ -45,6 +52,7 @@ let mouseX = -9999;
 let mouseY = -9999;
 
 // 定时获取全局鼠标位置（穿透模式下 mousemove 不触发，需要从 Rust 端获取）
+// 50ms 轮询让蛇头跟随更灵敏
 setInterval(async () => {
   try {
     const [x, y] = await invoke('get_cursor_pos');
@@ -56,7 +64,7 @@ setInterval(async () => {
   } catch (e) {
     // fallback：如果获取失败，保持上次值
   }
-}, 100);
+}, 50);
 
 // 全屏检测
 let wasFullscreen = false;
@@ -114,14 +122,16 @@ async function loadProgress() {
 }
 
 /**
- * 前端实时计算进度百分比（精确到秒）
+ * 前端实时计算进度百分比（精确到毫秒）
  * 使用本地 Date 对象，避免每帧 IPC 调用
+ * 毫秒级精度让蛇身移动和百分比数字更加平滑连续
  */
 function calcRealtimePercent() {
   if (!config) return 0;
 
   const now = new Date();
-  const currentTotalSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  // 毫秒级时间戳，让进度变化连续而非跳变
+  const currentTotalMs = now.getHours() * 3600000 + now.getMinutes() * 60000 + now.getSeconds() * 1000 + now.getMilliseconds();
 
   // 工作日判断
   const weekday = now.getDay() === 0 ? 7 : now.getDay(); // 1=周一..7=周日
@@ -130,47 +140,47 @@ function calcRealtimePercent() {
 
   const parseTime = (str) => {
     const [h, m] = str.split(':').map(Number);
-    return h * 3600 + m * 60;
+    return h * 3600000 + m * 60000; // 毫秒级
   };
 
-  const startSec = parseTime(config.workTime.start);
-  const endSec = parseTime(config.workTime.end);
+  const startMs = parseTime(config.workTime.start);
+  const endMs = parseTime(config.workTime.end);
 
   // 午休（仅计算落在工作时段内的午休时间）
   const lunchEnabled = config.workTime.lunch.enabled;
-  const lunchStartSec = parseTime(config.workTime.lunch.start);
-  const lunchEndSec = parseTime(config.workTime.lunch.end);
+  const lunchStartMs = parseTime(config.workTime.lunch.start);
+  const lunchEndMs = parseTime(config.workTime.lunch.end);
   const lunchDuration = lunchEnabled
-    ? Math.max(0, Math.min(lunchEndSec, endSec) - Math.max(lunchStartSec, startSec))
+    ? Math.max(0, Math.min(lunchEndMs, endMs) - Math.max(lunchStartMs, startMs))
     : 0;
 
-  const totalSec = Math.max(0, endSec - startSec);
-  const totalWorkSec = totalSec - lunchDuration;
+  const totalMs = Math.max(0, endMs - startMs);
+  const totalWorkMs = totalMs - lunchDuration;
 
-  if (totalWorkSec <= 0) return 0;
+  if (totalWorkMs <= 0) return 0;
 
   // 上班前
-  if (currentTotalSeconds < startSec) return 0;
+  if (currentTotalMs < startMs) return 0;
 
   // 下班后
-  if (currentTotalSeconds >= endSec) return 100;
+  if (currentTotalMs >= endMs) return 100;
 
   // 午休中（仅在午休与工作时段有交集时才生效）
   if (lunchEnabled && lunchDuration > 0
-      && currentTotalSeconds >= Math.max(lunchStartSec, startSec)
-      && currentTotalSeconds < Math.min(lunchEndSec, endSec)) {
-    const elapsedToLunch = Math.max(0, Math.max(lunchStartSec, startSec) - startSec);
-    return (elapsedToLunch / totalWorkSec) * 100;
+      && currentTotalMs >= Math.max(lunchStartMs, startMs)
+      && currentTotalMs < Math.min(lunchEndMs, endMs)) {
+    const elapsedToLunch = Math.max(0, Math.max(lunchStartMs, startMs) - startMs);
+    return (elapsedToLunch / totalWorkMs) * 100;
   }
 
   // 工作中
-  let elapsed = currentTotalSeconds - startSec;
-  if (lunchEnabled && currentTotalSeconds >= Math.min(lunchEndSec, endSec)) {
+  let elapsed = currentTotalMs - startMs;
+  if (lunchEnabled && currentTotalMs >= Math.min(lunchEndMs, endMs)) {
     elapsed -= lunchDuration;
   }
   elapsed = Math.max(0, elapsed);
 
-  return Math.min(100, (elapsed / totalWorkSec) * 100);
+  return Math.min(100, (elapsed / totalWorkMs) * 100);
 }
 
 function getDefaultConfig() {
@@ -204,9 +214,13 @@ function getDefaultConfig() {
 
 // ============ 蛇身路径计算 ============
 
+// 路径点采样步长（px），与 pixelSize 解耦，保证不同像素大小下移动精度一致
+const PATH_STEP = 1;
+
 /**
  * 计算蛇身沿屏幕边框的路径点（逻辑像素坐标）
- * 每个点间隔 pixelSize，按顺时针排列
+ * 每个点间隔 PATH_STEP（1px），按顺时针排列
+ * pixelSize 仅影响视觉偏移量（margin），不影响路径密度
  */
 function calculateBorderPath(width, height, margin, pixelSize) {
   const ps = pixelSize;
@@ -221,22 +235,22 @@ function calculateBorderPath(width, height, margin, pixelSize) {
 
   // 单边模式：由起始位置+方向决定具体在哪条边
   if (displayMode === 'single') {
-    return calculateSingleSidePath(width, height, m, ps, alignToGrid, startPos, direction);
+    return calculateSingleSidePath(width, height, m, PATH_STEP, alignToGrid, startPos, direction);
   }
 
   // 全屏模式：生成四边路径
-  // 先生成四条边的点数组
+  // 使用 PATH_STEP（1px）作为步长，保证路径精度与 pixelSize 无关
   const top = [], right = [], bottom = [], left = [];
-  for (let x = m; x <= width - m + 0.5; x += ps) {
+  for (let x = m; x <= width - m + 0.5; x += PATH_STEP) {
     top.push({ x: alignToGrid ? Math.round(x) : x, y: m, side: 'top' });
   }
-  for (let y = m + ps; y <= height - m + 0.5; y += ps) {
+  for (let y = m + PATH_STEP; y <= height - m + 0.5; y += PATH_STEP) {
     right.push({ x: width - m, y: alignToGrid ? Math.round(y) : y, side: 'right' });
   }
-  for (let x = width - m - ps; x >= m - 0.5; x -= ps) {
+  for (let x = width - m - PATH_STEP; x >= m - 0.5; x -= PATH_STEP) {
     bottom.push({ x: alignToGrid ? Math.round(x) : x, y: height - m, side: 'bottom' });
   }
-  for (let y = height - m - ps; y >= m + ps - 0.5; y -= ps) {
+  for (let y = height - m - PATH_STEP; y >= m + PATH_STEP - 0.5; y -= PATH_STEP) {
     left.push({ x: m, y: alignToGrid ? Math.round(y) : y, side: 'left' });
   }
 
@@ -333,37 +347,90 @@ function getSnakeBlocks(percent, path) {
   const totalBlocks = path.length;
   if (totalBlocks === 0) return [];
 
-  // 精确的浮点索引，支持亚像素级平滑移动
-  const exactIndex = (percent / 100) * totalBlocks;
-  const headBlockIndex = Math.min(Math.floor(exactIndex), totalBlocks - 1);
-  // 蛇头在当前点与下一点之间的插值比例 [0, 1)
-  const frac = exactIndex - Math.floor(exactIndex);
+  const ps = config.appearance.pixelSize;
 
-  let startBlock = 0;
-  if (config.appearance.snakeLengthMode === 'fixed') {
-    const fixedLength = Math.floor(totalBlocks * (config.appearance.fixedLengthPercent / 100));
-    startBlock = Math.max(0, headBlockIndex - fixedLength);
+  // 蛇头的浮点索引（路径中 1px 精度）
+  const exactHeadIndex = (percent / 100) * totalBlocks;
+  const clampedHead = Math.min(exactHeadIndex, totalBlocks - 1);
+
+  // 生成动画期间，蛇身长度基于目标百分比计算（而非动画百分比）
+  // 这样蛇身从一开始就有完整的方块数量，只是通过 spawnScale 从 0 生长
+  let lengthRefHead = clampedHead;
+  if (spawnAnimActive) {
+    lengthRefHead = Math.min((spawnAnimTargetPercent / 100) * totalBlocks, totalBlocks - 1);
   }
 
+  // 蛇身长度（以像素为单位的路径长度）
+  let snakeLengthPx;
+  if (config.appearance.snakeLengthMode === 'fixed') {
+    snakeLengthPx = Math.max(ps, totalBlocks * (config.appearance.fixedLengthPercent / 100));
+  } else {
+    // trailing 模式：蛇尾从路径起点开始
+    snakeLengthPx = Math.max(ps, lengthRefHead + 1);
+  }
+
+  // 蛇尾的浮点索引
+  const exactTailIndex = Math.max(0, lengthRefHead - snakeLengthPx + 1);
+
+  // 生成动画期间，蛇身只显示从蛇头到当前动画位置的部分
+  // 蛇尾方向的方块还没被"生长"到，不应该显示
+  const visibleTailIndex = spawnAnimActive
+    ? Math.max(0, clampedHead - snakeLengthPx + 1)
+    : exactTailIndex;
+
+  // 生成动画时，蛇头附近新方块的"生长区域"长度（像素）
+  const spawnZonePx = ps * 3;
+
+  // 从蛇头往蛇尾方向按 ps 间距采样方块
+  // 蛇头位置使用 clampedHead（浮点），保证蛇头按像素平滑移动
+  const blockCount = Math.max(1, Math.floor((clampedHead - visibleTailIndex) / ps) + 1);
+  // 蛇头大小 ps+2，蛇身大小 ps-gap，蛇头比蛇身大 2+gap，需要额外间距避免重叠
+  const gap = ps >= 4 ? 1 : 0;
+  const headSpacing = ps + Math.ceil((2 + gap) / 2); // 蛇头与第一个蛇身方块的间距
   const blocks = [];
-  for (let i = startBlock; i <= headBlockIndex; i++) {
+  for (let i = 0; i < blockCount; i++) {
+    // i=0 是蛇头位置（浮点），i=1 是第一个蛇身（额外间距），i>=2 按 ps 间距
+    const fi = i === 0 ? clampedHead : clampedHead - headSpacing - (i - 1) * ps;
+
+    // 安全检查：超出可见蛇尾范围则停止
+    if (fi < visibleTailIndex) break;
+
+    const idx = Math.floor(fi);
+    const f = fi - idx; // 插值比例 [0, 1)
+
+    // 安全检查
+    if (idx < 0 || idx >= totalBlocks) continue;
+
+    const cur = path[idx];
+    const next = path[Math.min(idx + 1, totalBlocks - 1)];
+    // 在两个路径点之间线性插值，实现像素级平滑移动
+    const x = cur.x + (next.x - cur.x) * f;
+    const y = cur.y + (next.y - cur.y) * f;
+
+    // 计算方块的生成缩放：蛇头附近的方块从 0 生长到 1
+    // distFromHead = 蛇头到此方块的像素距离
+    let spawnScale = 1;
+    if (spawnAnimActive) {
+      const distFromHead = i === 0 ? 0 : headSpacing + (i - 1) * ps;
+      if (distFromHead < spawnZonePx) {
+        // 在生长区域内：0（蛇头处）→ 1（生长区域边界）
+        spawnScale = Math.max(0, distFromHead / spawnZonePx);
+      }
+    }
+
     blocks.push({
-      x: path[i].x,
-      y: path[i].y,
-      side: path[i].side,
-      index: i,
-      isHead: i === headBlockIndex,
-      progressRatio: totalBlocks > 1 ? i / (totalBlocks - 1) : 0,
+      x,
+      y,
+      side: cur.side,
+      index: idx,
+      isHead: i === 0,
+      progressRatio: totalBlocks > 1 ? idx / (totalBlocks - 1) : 0,
+      spawnScale,
     });
   }
 
-  // 蛇头线性插值：在当前点与下一点之间平滑过渡
-  if (blocks.length > 0 && frac > 0 && headBlockIndex < totalBlocks - 1) {
-    const head = blocks[blocks.length - 1];
-    const next = path[headBlockIndex + 1];
-    head.x = head.x + (next.x - head.x) * frac;
-    head.y = head.y + (next.y - head.y) * frac;
-  }
+  // blocks 是从蛇头到蛇尾的顺序，反转后变为蛇尾到蛇头（drawSnakeBody 期望的顺序）
+  blocks.reverse();
 
   return blocks;
 }
@@ -446,13 +513,33 @@ function render(timestamp) {
   }
 
   const { pixelSize, margin, showTrail, headGlow } = config.appearance;
-  const percent = calcRealtimePercent();
+  const realPercent = calcRealtimePercent();
   const path = calculateBorderPath(w, h, margin, pixelSize);
 
-  // 更新蠕动偏移
+  // 蛇身生成动画：从 0 线性增长到实际进度
+  if (spawnAnimActive) {
+    const elapsed = (timestamp - spawnAnimStartTime) / 1000; // 秒
+    const progress = Math.min(1, elapsed / SPAWN_ANIM_DURATION);
+    // easeInOutQuad：开始慢→中间快→结尾慢，全程清晰可见
+    const eased = progress < 0.5
+      ? 2 * progress * progress
+      : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+    spawnAnimPercent = spawnAnimTargetPercent * eased;
+    if (progress >= 1) {
+      spawnAnimPercent = spawnAnimTargetPercent;
+      spawnAnimActive = false;
+    }
+  }
+  // 生成动画期间使用动画百分比，否则用实际百分比
+  const percent = spawnAnimActive ? spawnAnimPercent : realPercent;
+
+  // 更新蠕动偏移（基于时间差，避免帧率变化影响蠕动速度）
   const speedMap = { slow: 0.3, normal: 1, fast: 3 };
   const speed = speedMap[config.appearance.animationSpeed] || 1;
-  wiggleOffset = (wiggleOffset + speed * 0.5) % pixelSize;
+  const deltaSec = Math.min((timestamp - lastFrameTime + FRAME_INTERVAL) / 1000, 0.1);
+  // wiggleOffset 以弧度为单位持续增长（mod 2π），配合 bIdx 实现连续平滑蠕动
+  // normal 速度下约 2 秒完成一个完整波浪周期
+  wiggleOffset = (wiggleOffset + speed * deltaSec * Math.PI) % (Math.PI * 2);
   // 更新蛇身动画相位
   bodyAnimPhase = (timestamp / 1000) % (Math.PI * 2);
 
@@ -529,9 +616,11 @@ function drawTrail(path, percent, pixelSize) {
   const opacity = 0.06 * fadeOpacity;
   const half = pixelSize / 2;
   const snap = pixelSize <= 2;
+  // 路径点现在是 1px 间距，按 pixelSize*2 步进绘制轨迹点
+  const step = Math.max(2, pixelSize * 2);
 
   ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-  for (let i = headBlockIndex + 1; i < totalBlocks; i += 2) {
+  for (let i = headBlockIndex + 1; i < totalBlocks; i += step) {
     const p = path[i];
     if (p) {
       const tx = snap ? Math.round(p.x - half) : p.x - half;
@@ -580,27 +669,27 @@ function drawSnakeBody(blocks, pixelSize) {
         switch (motionMode) {
           case 'wave': {
             // 波浪：大幅正弦波，蛇身像水波一样起伏
-            const wave = Math.sin((block.index + wiggleOffset) * 0.35) * Math.min(2, pixelSize * 0.3);
+            const wave = Math.sin(bIdx * 0.35 + wiggleOffset) * Math.min(2, pixelSize * 0.6);
             if (isVertical) { dy = wave; } else { dx = wave; }
             break;
           }
           case 'bounce': {
             // 弹跳：整段蛇身上下弹跳，幅度随位置变化
-            const bounce = Math.abs(Math.sin((block.index + wiggleOffset) * 0.3)) * Math.min(2, pixelSize * 0.25);
+            const bounce = Math.abs(Math.sin(bIdx * 0.3 + wiggleOffset)) * Math.min(2, pixelSize * 0.25);
             if (isVertical) { dy = -bounce; } else { dx = -bounce; }
             break;
           }
           case 'coil': {
             // 缠绕：双轴交叉波动，营造蛇身缠绕感
-            const c1 = Math.sin((block.index + wiggleOffset) * 0.4) * Math.min(1.5, pixelSize * 0.18);
-            const c2 = Math.cos((block.index + wiggleOffset) * 0.25) * Math.min(1, pixelSize * 0.1);
+            const c1 = Math.sin(bIdx * 0.4 + wiggleOffset) * Math.min(1.5, pixelSize * 0.18);
+            const c2 = Math.cos(bIdx * 0.25 + wiggleOffset) * Math.min(1, pixelSize * 0.1);
             dx = c1; dy = c2;
             break;
           }
           case 'wiggle':
           default: {
             // 抖动（默认）：原有小幅摆动
-            const wiggle = Math.sin((block.index + wiggleOffset) * 0.5) * Math.min(1, pixelSize * 0.12);
+            const wiggle = Math.sin(bIdx * 0.5 + wiggleOffset) * Math.min(1, pixelSize * 0.12);
             if (isVertical) { dy = wiggle; } else { dx = wiggle; }
             break;
           }
@@ -727,11 +816,11 @@ function drawBodyAnimEffect(bx, by, size, block, bIdx, total, effect) {
     }
     case 'sparkle': {
       // 闪烁星光：随机位置出现的明显亮点+十字光芒
-      const seed = block.index * 7 + Math.floor(phase * 4);
+      const seed = bIdx * 7 + Math.floor(phase * 4);
       const rand = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453;
       const sparkleChance = rand - Math.floor(rand);
       if (sparkleChance > 0.75) { // 更多方块参与闪烁
-        const flicker = 0.5 + Math.sin(phase * 5 + block.index) * 0.5; // 0~1 闪烁
+        const flicker = 0.5 + Math.sin(phase * 5 + bIdx) * 0.5; // 0~1 闪烁
         const sparkleAlpha = flicker * 0.8 * fadeOpacity;
         const dotR = Math.max(1.5, size * 0.35);
         // 中心亮点
@@ -922,8 +1011,8 @@ function drawSpriteHead(headBlock, headSize, dx, dy, variant) {
   const direction = sideToDir[headBlock.side] || 'right';
   const headColor = config.appearance.headColor;
 
-  // 生成精灵图
-  const sprite = spriteGen.generateHead(Math.round(headSize), direction, headColor, variant);
+  // 生成精灵图（保证最小尺寸 >= 2）
+  const sprite = spriteGen.generateHead(Math.max(2, Math.round(headSize)), direction, headColor, variant);
 
   // 绘制蛇头发光
   const headRgb = hexToRgb(headColor);
@@ -1177,7 +1266,8 @@ function drawStatusText(w, h) {
 
   // 工作中：在蛇头旁显示实时进度
   if (progressInfo.status === 'Working' || progressInfo.isLunchBreak) {
-    const percent = calcRealtimePercent();
+    // 生成动画期间使用动画百分比，与蛇身位置同步
+    const percent = spawnAnimActive ? spawnAnimPercent : calcRealtimePercent();
     const percentText = percent.toFixed(3) + '%';
     ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * fadeOpacity})`;
     ctx.font = 'bold 11px "Segoe UI", "Microsoft YaHei", sans-serif';
@@ -1460,6 +1550,8 @@ async function setupEventListeners() {
 
   await listen('fade-in', () => {
     fadeTarget = 1;
+    // 触发蛇身生成动画
+    triggerSpawnAnim();
   });
 
   await listen('show-about', () => {
@@ -1649,6 +1741,19 @@ function showAboutDialog() {
   observer.observe(document.body, { childList: true });
 }
 
+// ============ 蛇身生成动画 ============
+
+/**
+ * 触发蛇身生成动画：蛇身从 0% 开始生长到当前实际进度
+ * 在全屏退出、窗口重新显示时调用
+ */
+function triggerSpawnAnim() {
+  spawnAnimPercent = 0;
+  spawnAnimTargetPercent = calcRealtimePercent();
+  spawnAnimStartTime = performance.now();
+  spawnAnimActive = true;
+}
+
 // ============ 全屏检测 ============
 
 function startFullscreenDetection() {
@@ -1662,6 +1767,8 @@ function startFullscreenDetection() {
       } else if (!isFullscreen && wasFullscreen) {
         fadeTarget = 1;
         wasFullscreen = false;
+        // 触发蛇身生成动画
+        triggerSpawnAnim();
       }
     } catch (e) {}
   }, 500);
@@ -1693,6 +1800,8 @@ async function init() {
   setInterval(updateProgress, PROGRESS_UPDATE_INTERVAL);
   setInterval(loadConfig, 5000);
   startFullscreenDetection();
+  // 启动时触发蛇身生成动画
+  triggerSpawnAnim();
   animationId = requestAnimationFrame(render);
   await setupEventListeners();
 
