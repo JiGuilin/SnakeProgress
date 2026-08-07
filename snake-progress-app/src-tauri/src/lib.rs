@@ -462,7 +462,15 @@ pub fn run() {
 
                     let mut was_near_edge = false;
                     loop {
-                        std::thread::sleep(std::time::Duration::from_millis(80));
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+
+                        // 窗口隐藏时跳过所有检测，减少 IO
+                        if let Some(window) = click_app.get_webview_window("main") {
+                            if !window.is_visible().unwrap_or(false) {
+                                was_near_edge = false;
+                                continue;
+                            }
+                        }
 
                         let config = click_app.state::<AppState>().config.lock().unwrap().clone();
 

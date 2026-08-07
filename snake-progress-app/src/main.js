@@ -31,6 +31,16 @@ let fadeOpacity = 1.0;
 let fadeTarget = 1.0;
 const FADE_SPEED = 0.05;
 
+// 窗口隐藏状态：隐藏时停止 rAF 和所有定时器，彻底消除 IO
+let isHidden = false;
+let rafPaused = false;
+
+// 定时器引用（隐藏时清除，显示时重建）
+let mousePollTimer = null;
+let canvasCheckTimer = null;
+let progressTimer = null;
+let configReloadTimer = null;
+
 // 蛇身生成动画：从 0% 生长到实际进度
 let spawnAnimActive = false;
 let spawnAnimPercent = 0;       // 动画当前显示的百分比
@@ -38,10 +48,14 @@ let spawnAnimTargetPercent = 0; // 动画目标百分比（实际进度）
 const SPAWN_ANIM_DURATION = 10.0; // 生成动画持续时间（秒）
 let spawnAnimStartTime = 0;     // 动画开始时间戳
 
-// 帧率限制（60fps 让蛇身移动更平滑）
+// 帧率限制（60fps 保证蛇身移动流畅）
 const TARGET_FPS = 60;
 const FRAME_INTERVAL = 1000 / TARGET_FPS;
 let lastFrameTime = 0;
+
+// 路径缓存：避免每帧重建数千个点的数组
+let cachedPath = null;
+let cachedPathKey = '';
 
 // Tooltip 状态
 let tooltipVisible = false;
@@ -52,19 +66,21 @@ let mouseX = -9999;
 let mouseY = -9999;
 
 // 定时获取全局鼠标位置（穿透模式下 mousemove 不触发，需要从 Rust 端获取）
-// 50ms 轮询让蛇头跟随更灵敏
-setInterval(async () => {
-  try {
-    const [x, y] = await invoke('get_cursor_pos');
-    // get_cursor_pos 返回物理像素，需要转换为逻辑像素
-    // 使用 devicePixelRatio 或窗口尺寸与屏幕尺寸的比例换算
-    const dpr = window.devicePixelRatio || 1;
-    mouseX = x / dpr;
-    mouseY = y / dpr;
-  } catch (e) {
-    // fallback：如果获取失败，保持上次值
-  }
-}, 50);
+// 100ms 轮询，兼顾蛇头跟随灵敏度和减少 IPC 开销
+function startMousePoll() {
+  if (mousePollTimer) return;
+  mousePollTimer = setInterval(async () => {
+    try {
+      const [x, y] = await invoke('get_cursor_pos');
+      const dpr = window.devicePixelRatio || 1;
+      mouseX = x / dpr;
+      mouseY = y / dpr;
+    } catch (e) {}
+  }, 100);
+}
+function stopMousePoll() {
+  if (mousePollTimer) { clearInterval(mousePollTimer); mousePollTimer = null; }
+}
 
 // 全屏检测
 let wasFullscreen = false;
@@ -93,20 +109,34 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-setInterval(() => {
-  const currentW = parseInt(canvas.style.width);
-  const currentH = parseInt(canvas.style.height);
-  if (currentW !== window.innerWidth || currentH !== window.innerHeight) {
-    resizeCanvas();
-  }
-}, 2000);
+function startCanvasCheck() {
+  if (canvasCheckTimer) return;
+  canvasCheckTimer = setInterval(() => {
+    const currentW = parseInt(canvas.style.width);
+    const currentH = parseInt(canvas.style.height);
+    if (currentW !== window.innerWidth || currentH !== window.innerHeight) {
+      resizeCanvas();
+    }
+  }, 2000);
+}
+function stopCanvasCheck() {
+  if (canvasCheckTimer) { clearInterval(canvasCheckTimer); canvasCheckTimer = null; }
+}
 
 // ============ 配置与进度加载 ============
 async function loadConfig() {
   try {
-    config = await invoke('get_config');
-    // 配置变更时清除 sprite 缓存
-    if (typeof spriteGen !== 'undefined') spriteGen.clearCache();
+    const newConfig = await invoke('get_config');
+    // 只在外观配置真正变化时才清除 sprite 缓存，避免每 5 秒重建 canvas
+    const appearanceChanged = !config || JSON.stringify(config.appearance) !== JSON.stringify(newConfig.appearance);
+    if (appearanceChanged && typeof spriteGen !== 'undefined') {
+      spriteGen.clearCache();
+    }
+    // 外观变化时清除路径缓存
+    if (appearanceChanged) {
+      cachedPathKey = '';
+    }
+    config = newConfig;
   } catch (e) {
     console.error('加载配置失败:', e);
     config = getDefaultConfig();
@@ -505,6 +535,13 @@ function render(timestamp) {
     return;
   }
 
+  // 窗口完全透明且目标是隐藏 → 停止 rAF，彻底消除 WebView2 渲染 IO
+  if (fadeOpacity < 0.01 && fadeTarget < 0.01) {
+    rafPaused = true;
+    animationId = null;
+    return; // 不再 requestAnimationFrame，等 fade-in 时重启
+  }
+
   // 淡入淡出插值
   if (fadeOpacity < fadeTarget) {
     fadeOpacity = Math.min(fadeOpacity + FADE_SPEED, fadeTarget);
@@ -514,7 +551,16 @@ function render(timestamp) {
 
   const { pixelSize, margin, showTrail, headGlow } = config.appearance;
   const realPercent = calcRealtimePercent();
-  const path = calculateBorderPath(w, h, margin, pixelSize);
+  // 路径缓存：只在窗口尺寸/外观配置变化时重建
+  const pathKey = `${w}x${h}_${margin}_${pixelSize}_${config.display.mode}`;
+  let path;
+  if (pathKey === cachedPathKey && cachedPath) {
+    path = cachedPath;
+  } else {
+    path = calculateBorderPath(w, h, margin, pixelSize);
+    cachedPath = path;
+    cachedPathKey = pathKey;
+  }
 
   // 蛇身生成动画：从 0 线性增长到实际进度
   if (spawnAnimActive) {
@@ -1546,10 +1592,31 @@ async function setupEventListeners() {
 
   await listen('fade-out', () => {
     fadeTarget = 0;
+    isHidden = true;
+    // 停止所有定时器（鼠标轮询、全屏检测、Canvas检测、进度、配置）
+    stopMousePoll();
+    stopCanvasCheck();
+    stopProgressTimer();
+    stopConfigReloadTimer();
+    stopFullscreenDetection();
+    // rAF 会在下一帧检测到 fadeOpacity < 0.01 后自行停止
   });
 
   await listen('fade-in', () => {
     fadeTarget = 1;
+    isHidden = false;
+    // 恢复所有定时器
+    startMousePoll();
+    startCanvasCheck();
+    startProgressTimer();
+    startConfigReloadTimer();
+    startFullscreenDetection();
+    // 恢复 rAF（如果已暂停）
+    if (rafPaused || !animationId) {
+      rafPaused = false;
+      lastFrameTime = 0;
+      animationId = requestAnimationFrame(render);
+    }
     // 触发蛇身生成动画
     triggerSpawnAnim();
   });
@@ -1757,6 +1824,7 @@ function triggerSpawnAnim() {
 // ============ 全屏检测 ============
 
 function startFullscreenDetection() {
+  if (fullscreenCheckInterval) return;
   fullscreenCheckInterval = setInterval(() => {
     if (!config || !config.display.autoHideFullscreen) return;
     try {
@@ -1772,6 +1840,9 @@ function startFullscreenDetection() {
       }
     } catch (e) {}
   }, 500);
+}
+function stopFullscreenDetection() {
+  if (fullscreenCheckInterval) { clearInterval(fullscreenCheckInterval); fullscreenCheckInterval = null; }
 }
 
 // ============ 定时更新进度 ============
@@ -1791,14 +1862,32 @@ async function updateProgress() {
   lastCelebrationPercent = currentPercent;
 }
 
+function startProgressTimer() {
+  if (progressTimer) return;
+  progressTimer = setInterval(updateProgress, PROGRESS_UPDATE_INTERVAL);
+}
+function stopProgressTimer() {
+  if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+}
+
+function startConfigReloadTimer() {
+  if (configReloadTimer) return;
+  configReloadTimer = setInterval(loadConfig, 10000);
+}
+function stopConfigReloadTimer() {
+  if (configReloadTimer) { clearInterval(configReloadTimer); configReloadTimer = null; }
+}
+
 // ============ 主入口 ============
 
 async function init() {
   await loadConfig();
   await loadProgress();
 
-  setInterval(updateProgress, PROGRESS_UPDATE_INTERVAL);
-  setInterval(loadConfig, 5000);
+  startMousePoll();
+  startCanvasCheck();
+  startProgressTimer();
+  startConfigReloadTimer();
   startFullscreenDetection();
   // 启动时触发蛇身生成动画
   triggerSpawnAnim();
