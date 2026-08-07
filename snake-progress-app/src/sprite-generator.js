@@ -30,7 +30,7 @@ class SpriteGenerator {
    * @param {number} size - 像素尺寸
    * @param {string} direction - 方向: top, right, bottom, left
    * @param {string} headColor - 蛇头颜色 (hex)
-   * @param {string} variant - 变体: 'classic', 'pixel', 'cute', 'dragon', 'robot'
+   * @param {string} variant - 变体: 'classic', 'pixel', 'cute', 'dragon', 'robot', 'ghost', 'knight', 'alien'
    * @returns {HTMLCanvasElement}
    */
 generateHead(size, direction, headColor, variant = 'classic') {
@@ -59,6 +59,15 @@ const key = this._getCacheKey('head', variant, size, direction, headColor);
         break;
       case 'robot':
         this._drawRobotHead(ctx, s, px, direction, headColor);
+        break;
+      case 'ghost':
+        this._drawGhostHead(ctx, s, px, direction, headColor);
+        break;
+      case 'knight':
+        this._drawKnightHead(ctx, s, px, direction, headColor);
+        break;
+      case 'alien':
+        this._drawAlienHead(ctx, s, px, direction, headColor);
         break;
       default:
         this._drawClassicHead(ctx, s, px, direction, headColor);
@@ -236,13 +245,98 @@ const key = this._getCacheKey('head', variant, size, direction, headColor);
     this._drawPixelTemplate(ctx, template, s, px, colorMap);
   }
 
+  /**
+   * 幽灵蛇头 - 飘逸波浪底，大眼睛
+   */
+  _drawGhostHead(ctx, s, px, dir, color) {
+    const rgb = this._hexToRgb(color);
+    const lightColor = `rgb(${Math.min(255,rgb.r+50)},${Math.min(255,rgb.g+50)},${Math.min(255,rgb.b+50)})`;
+    const darkColor = `rgb(${Math.floor(rgb.r*0.6)},${Math.floor(rgb.g*0.6)},${Math.floor(rgb.b*0.6)})`;
+
+    const headRight = [
+      [0,0,0,1,1,1,1,1],
+      [0,0,1,1,3,3,3,1],
+      [0,1,1,3,3,3,3,1],
+      [0,1,3,3,4,4,3,1],
+      [0,1,3,3,5,5,3,1],
+      [0,1,3,3,3,3,3,1],
+      [0,1,1,3,3,3,1,1],
+      [0,1,0,1,0,1,0,1],
+    ];
+
+    const colorMap = {
+      1: color, 2: darkColor, 3: lightColor,
+      4: '#ffffff', 5: '#1a1a2e'
+    };
+
+    const template = this._rotateTemplate(headRight, dir);
+    this._drawPixelTemplate(ctx, template, s, px, colorMap);
+  }
+
+  /**
+   * 骑士蛇头 - 带头盔和面甲缝隙
+   */
+  _drawKnightHead(ctx, s, px, dir, color) {
+    const rgb = this._hexToRgb(color);
+    const steel = `rgb(${Math.min(255,Math.floor(rgb.r*0.8)+80)},${Math.min(255,Math.floor(rgb.g*0.8)+80)},${Math.min(255,Math.floor(rgb.b*0.8)+80)})`;
+    const steelDark = `rgb(${Math.floor(rgb.r*0.4)},${Math.floor(rgb.g*0.4)},${Math.floor(rgb.b*0.4)})`;
+    const gold = '#ffd700';
+
+    const headRight = [
+      [0,0,0,6,6,6,0,0],
+      [0,0,6,6,3,3,6,0],
+      [0,6,6,3,3,3,6,6],
+      [0,6,3,3,4,5,3,6],
+      [0,6,3,3,4,5,3,6],
+      [0,6,6,3,3,3,6,6],
+      [0,0,6,7,6,7,6,0],
+      [0,0,0,6,6,6,0,0],
+    ];
+    // 6=钢色, 7=面甲缝
+    const colorMap = {
+      1: color, 2: steelDark, 3: steel,
+      4: '#ffffff', 5: '#111111', 6: steel, 7: steelDark, 8: gold
+    };
+
+    const template = this._rotateTemplate(headRight, dir);
+    this._drawPixelTemplate(ctx, template, s, px, colorMap);
+  }
+
+  /**
+   * 外星蛇头 - 大脑壳，触角，异形眼
+   */
+  _drawAlienHead(ctx, s, px, dir, color) {
+    const rgb = this._hexToRgb(color);
+    const darkColor = `rgb(${Math.floor(rgb.r*0.5)},${Math.floor(rgb.g*0.5)},${Math.floor(rgb.b*0.5)})`;
+    const glowColor = `rgb(${Math.min(255,rgb.r+60)},${Math.min(255,rgb.g+60)},${Math.min(255,rgb.b+60)})`;
+
+    const headRight = [
+      [0,6,0,0,0,0,0,6],
+      [0,0,6,0,0,0,6,0],
+      [0,0,0,1,1,1,0,0],
+      [0,1,1,1,3,1,1,1],
+      [0,1,3,7,7,7,3,1],
+      [0,1,1,3,7,7,3,1],
+      [0,0,1,1,1,1,1,0],
+      [0,0,0,2,2,2,0,0],
+    ];
+    // 6=触角色, 7=异色眼
+    const colorMap = {
+      1: color, 2: darkColor, 3: glowColor,
+      4: '#ffffff', 5: '#111111', 6: darkColor, 7: '#a0ff00'
+    };
+
+    const template = this._rotateTemplate(headRight, dir);
+    this._drawPixelTemplate(ctx, template, s, px, colorMap);
+  }
+
   // ============ 蛇身精灵 ============
 
   /**
    * 生成蛇身段精灵图
    * @param {number} size - 像素尺寸
    * @param {string} bodyColor - 蛇身颜色 (hex)
-   * @param {string} variant - 变体: 'classic', 'pixel', 'scale', 'armor', 'glow'
+   * @param {string} variant - 变体: 'classic', 'pixel', 'scale', 'armor', 'glow', 'crystal', 'circuit', 'lava'
    * @param {number} index - 在蛇身中的位置索引（用于纹理变化）
    * @returns {HTMLCanvasElement}
    */
@@ -270,6 +364,15 @@ const key = this._getCacheKey('body', variant, size, index % 2, bodyColor);
         break;
       case 'glow':
         this._drawGlowBody(ctx, size, px, bodyColor, index);
+        break;
+      case 'crystal':
+        this._drawCrystalBody(ctx, size, px, bodyColor, index);
+        break;
+      case 'circuit':
+        this._drawCircuitBody(ctx, size, px, bodyColor, index);
+        break;
+      case 'lava':
+        this._drawLavaBody(ctx, size, px, bodyColor, index);
         break;
       default:
         this._drawClassicBody(ctx, size, px, bodyColor, index);
@@ -388,6 +491,118 @@ const key = this._getCacheKey('body', variant, size, index % 2, bodyColor);
     ctx.fillRect(s * 0.2, s * 0.2, s * 0.6, s * 0.6);
     ctx.shadowColor = 'transparent';
     ctx.shadowBlur = 0;
+  }
+
+  /**
+   * 水晶蛇身 - 菱形切面，高光反射
+   */
+  _drawCrystalBody(ctx, s, px, color, index) {
+    const rgb = this._hexToRgb(color);
+    const light = `rgb(${Math.min(255,Math.floor(rgb.r*1.3))},${Math.min(255,Math.floor(rgb.g*1.3))},${Math.min(255,Math.floor(rgb.b*1.3))})`;
+    const dark = `rgb(${Math.floor(rgb.r*0.5)},${Math.floor(rgb.g*0.5)},${Math.floor(rgb.b*0.5)})`;
+    const mid = color;
+
+    ctx.fillStyle = mid;
+    ctx.fillRect(0, 0, s, s);
+
+    // 菱形切面：上下三角亮色 + 左右三角暗色
+    const half = s / 2;
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.moveTo(0, 0); ctx.lineTo(s, 0); ctx.lineTo(half, half);
+    ctx.closePath(); ctx.fill();
+
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.moveTo(0, s); ctx.lineTo(s, s); ctx.lineTo(half, half);
+    ctx.closePath(); ctx.fill();
+
+    // 中心高光点
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.arc(half, half, Math.max(1, s * 0.08), 0, Math.PI * 2);
+    ctx.fill();
+
+    // 交替偏暗
+    if (index % 2 === 1) {
+      ctx.fillStyle = 'rgba(0,0,0,0.1)';
+      ctx.fillRect(0, 0, s, s);
+    }
+  }
+
+  /**
+   * 电路蛇身 - 科技线路板风格
+   */
+  _drawCircuitBody(ctx, s, px, color, index) {
+    const rgb = this._hexToRgb(color);
+    const dark = `rgb(${Math.floor(rgb.r*0.3)},${Math.floor(rgb.g*0.3)},${Math.floor(rgb.b*0.3)})`;
+    const bright = `rgb(${Math.min(255,rgb.r+100)},${Math.min(255,rgb.g+100)},${Math.min(255,rgb.b+100)})`;
+
+    // 深色底板
+    ctx.fillStyle = dark;
+    ctx.fillRect(0, 0, s, s);
+
+    // 电路线条
+    ctx.strokeStyle = bright;
+    ctx.lineWidth = Math.max(1, px * 0.2);
+    ctx.beginPath();
+    if (index % 2 === 0) {
+      // 横线 + 竖弯
+      ctx.moveTo(0, s * 0.3); ctx.lineTo(s * 0.5, s * 0.3);
+      ctx.lineTo(s * 0.5, s * 0.7); ctx.lineTo(s, s * 0.7);
+    } else {
+      // 竖线 + 横弯
+      ctx.moveTo(s * 0.3, 0); ctx.lineTo(s * 0.3, s * 0.5);
+      ctx.lineTo(s * 0.7, s * 0.5); ctx.lineTo(s * 0.7, s);
+    }
+    ctx.stroke();
+
+    // 节点亮点
+    ctx.fillStyle = bright;
+    const nodeR = Math.max(1, px * 0.3);
+    ctx.beginPath(); ctx.arc(s * 0.5, s * 0.5, nodeR, 0, Math.PI * 2); ctx.fill();
+
+    if (s >= 8) {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, Math.max(1, px * 0.5), Math.max(1, px * 0.5));
+      ctx.fillRect(s - Math.max(1, px * 0.5), s - Math.max(1, px * 0.5), Math.max(1, px * 0.5), Math.max(1, px * 0.5));
+    }
+  }
+
+  /**
+   * 熔岩蛇身 - 裂纹熔岩，红黑交替
+   */
+  _drawLavaBody(ctx, s, px, color, index) {
+    const rgb = this._hexToRgb(color);
+    const dark = `rgb(${Math.floor(rgb.r*0.3)},${Math.floor(rgb.g*0.15)},${Math.floor(rgb.b*0.05)})`;
+    const hot = `rgb(${Math.min(255,rgb.r+50)},${Math.min(255,Math.floor(rgb.g*0.5))},${Math.floor(rgb.b*0.1)})`;
+    const glow = `rgb(255,${Math.min(255,Math.floor(rgb.g*0.8)+100)},${Math.floor(rgb.b*0.2)})`;
+
+    // 暗黑底
+    ctx.fillStyle = dark;
+    ctx.fillRect(0, 0, s, s);
+
+    // 熔岩裂缝
+    ctx.strokeStyle = hot;
+    ctx.lineWidth = Math.max(1, px * 0.25);
+    ctx.beginPath();
+    const seed = index * 7;
+    const r1 = (Math.sin(seed * 12.9) * 0.5 + 0.5);
+    const r2 = (Math.sin(seed * 78.2) * 0.5 + 0.5);
+    ctx.moveTo(s * r1, 0);
+    ctx.lineTo(s * (0.3 + r1 * 0.4), s * 0.5);
+    ctx.lineTo(s * r2, s);
+    ctx.stroke();
+
+    // 熔岩发光点
+    ctx.fillStyle = glow;
+    const dotR = Math.max(1, px * 0.3);
+    ctx.beginPath(); ctx.arc(s * (0.3 + r1 * 0.4), s * 0.5, dotR, 0, Math.PI * 2); ctx.fill();
+
+    if (s >= 6) {
+      ctx.fillStyle = hot;
+      ctx.fillRect(s * 0.1, s * 0.1, Math.max(1, px * 0.4), Math.max(1, px * 0.4));
+    }
   }
 
   // ============ 食物/道具精灵 ============

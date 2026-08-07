@@ -62,12 +62,12 @@ pub struct Appearance {
     pub head_glow: bool,
     #[serde(default = "default_body_motion")]
     pub body_motion_mode: String, // straight, wiggle, wave, bounce, coil
-    pub head_shape: String, // triangle, rectangle, square, circle, diamond, sprite_pixel/cute/dragon/robot
-    pub skin_texture: String, // solid, checkerboard, stripe, dots, sprite_pixel/scale/armor/glow
+    pub head_shape: String, // triangle, rectangle, square, circle, diamond, arrow, hexagon, star, sprite_pixel/cute/dragon/robot/ghost/knight/alien
+    pub skin_texture: String, // solid, checkerboard, stripe, dots, outline, cross, sprite_pixel/scale/armor/glow/crystal/circuit/lava
     #[serde(default = "default_true")]
     pub show_power_ups: bool, // 显示里程碑道具
     #[serde(default = "default_body_anim")]
-    pub body_anim_effect: String, // none, breathing, pulse, wave, sparkle, rainbow, glow, ripple
+    pub body_anim_effect: String, // none, breathing, pulse, wave, sparkle, rainbow, glow, ripple, lightning, neon, fire
     #[serde(default = "default_body_anim")]
     pub head_anim_effect: String, // none, nod, bob, wobble, shake, bounce
     #[serde(default = "default_body_anim")]

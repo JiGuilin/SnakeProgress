@@ -806,6 +806,12 @@ function drawSnakeBody(blocks, pixelSize) {
       } else if (texture === 'dots') {
         // 圆点：方块内绘制圆点
         drawDotsBlock(bx, by, scaledSize, block, bIdx);
+      } else if (texture === 'outline') {
+        // 描边：方块带高光描边
+        drawOutlineBlock(bx, by, scaledSize, block, bIdx);
+      } else if (texture === 'cross') {
+        // 十字：方块内绘制十字线
+        drawCrossBlock(bx, by, scaledSize, block, bIdx);
       }
 
       // 蛇身动画效果叠加
@@ -934,6 +940,62 @@ function drawBodyAnimEffect(bx, by, size, block, bIdx, total, effect) {
           ctx.beginPath();
           ctx.arc(cx, cy, size * 0.45, 0, Math.PI * 2);
           ctx.stroke();
+        }
+      }
+      break;
+    }
+    case 'lightning': {
+      // 闪电：随机方块上出现锯齿状闪电
+      const seed = bIdx * 13 + Math.floor(phase * 6);
+      const rand = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453;
+      const flashChance = rand - Math.floor(rand);
+      if (flashChance > 0.82) {
+        const flashAlpha = (0.6 + Math.sin(phase * 8 + bIdx) * 0.3) * fadeOpacity;
+        ctx.strokeStyle = `rgba(255, 255, 100, ${Math.max(0, flashAlpha)})`;
+        ctx.lineWidth = Math.max(1, size * 0.12);
+        ctx.beginPath();
+        const segs = 3;
+        let px = bx + size * 0.2, py = by;
+        ctx.moveTo(px, py);
+        for (let s = 1; s <= segs; s++) {
+          px = bx + size * (0.2 + 0.6 * (s / segs));
+          py = by + size * (s / segs) + (Math.sin(seed + s) * size * 0.15);
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'neon': {
+      // 霓虹：方块边缘叠加霓虹色辉光
+      const neonHue = (bIdx * 30 + phase * 40) % 360;
+      const neonPulse = 0.4 + Math.sin(phase * 2 + bIdx * 0.3) * 0.3;
+      ctx.shadowColor = `hsla(${neonHue}, 100%, 60%, ${neonPulse * fadeOpacity})`;
+      ctx.shadowBlur = size * 0.5;
+      ctx.fillStyle = `hsla(${neonHue}, 100%, 70%, ${0.3 * fadeOpacity})`;
+      ctx.fillRect(bx, by, size, size);
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      break;
+    }
+    case 'fire': {
+      // 火焰：从蛇尾向蛇头传播的红橙色脉动
+      const fireSpeed = 1.2;
+      const fireLen = 0.3;
+      const headRatio = bIdx / total;
+      const firePos = (phase * fireSpeed / (Math.PI * 2)) % 1;
+      const dist = Math.abs(headRatio - firePos);
+      const wrappedDist = Math.min(dist, 1 - dist);
+      if (wrappedDist < fireLen) {
+        const fireIntensity = Math.pow(1 - wrappedDist / fireLen, 1.2);
+        const fireHue = 10 + fireIntensity * 40; // 红→橙→黄
+        const fireAlpha = fireIntensity * 0.6 * fadeOpacity;
+        ctx.fillStyle = `hsla(${fireHue}, 100%, ${50 + fireIntensity * 20}%, ${fireAlpha})`;
+        ctx.fillRect(bx, by, size, size);
+        // 火焰中心更亮
+        if (fireIntensity > 0.7) {
+          ctx.fillStyle = `rgba(255, 255, 200, ${(fireIntensity - 0.7) * 2 * fadeOpacity})`;
+          ctx.fillRect(bx + size * 0.2, by + size * 0.2, size * 0.6, size * 0.6);
         }
       }
       break;
@@ -1174,6 +1236,42 @@ function drawDotsBlock(bx, by, size, block, bIdx) {
 }
 
 /**
+ * 描边纹理：方块内绘制带高光描边的方块
+ */
+function drawOutlineBlock(bx, by, size, block, bIdx) {
+  const baseColor = block.isHead ? getHeadColor() : getBlockColor(block);
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(bx, by, size, size);
+  // 内描边：亮色边框
+  const inset = Math.max(1, size * 0.15);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.strokeRect(bx + inset, by + inset, size - inset * 2, size - inset * 2);
+}
+
+/**
+ * 十字纹理：方块内绘制十字线
+ */
+function drawCrossBlock(bx, by, size, block, bIdx) {
+  const baseColor = block.isHead ? getHeadColor() : getBlockColor(block);
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(bx, by, size, size);
+  // 十字线
+  const lineW = Math.max(1, size * 0.15);
+  const cx = bx + size / 2;
+  const cy = by + size / 2;
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+  ctx.fillRect(bx, cy - lineW / 2, size, lineW);
+  ctx.fillRect(cx - lineW / 2, by, lineW, size);
+  // 中心亮点
+  const dotR = Math.max(1, size * 0.12);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
  * 绘制蛇头，支持多种形状：triangle, rectangle, square, circle, diamond
  * 鼠标靠近时蛇头微微偏向鼠标方向
  */
@@ -1274,6 +1372,89 @@ function drawHead(headBlock, headSize, dx, dy) {
     ctx.lineTo(right.x, right.y);
     ctx.lineTo(bottom.x, bottom.y);
     ctx.lineTo(left.x, left.y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else if (shape === 'arrow') {
+    // 箭头：前进方向有尖角，两侧有尾翼
+    const longHalf = half * 1.4;
+    const wingHalf = half * 0.6;
+    let tip, baseL, baseR, wingL, wingR;
+    if (dir === 'right') {
+      tip = { x: cx + longHalf, y: cy };
+      baseR = { x: cx - half * 0.5, y: cy - half };
+      baseL = { x: cx - half * 0.5, y: cy + half };
+      wingR = { x: cx - longHalf, y: cy - wingHalf };
+      wingL = { x: cx - longHalf, y: cy + wingHalf };
+    } else if (dir === 'bottom') {
+      tip = { x: cx, y: cy + longHalf };
+      baseR = { x: cx + half, y: cy - half * 0.5 };
+      baseL = { x: cx - half, y: cy - half * 0.5 };
+      wingR = { x: cx + wingHalf, y: cy - longHalf };
+      wingL = { x: cx - wingHalf, y: cy - longHalf };
+    } else if (dir === 'left') {
+      tip = { x: cx - longHalf, y: cy };
+      baseR = { x: cx + half * 0.5, y: cy + half };
+      baseL = { x: cx + half * 0.5, y: cy - half };
+      wingR = { x: cx + longHalf, y: cy + wingHalf };
+      wingL = { x: cx + longHalf, y: cy - wingHalf };
+    } else {
+      tip = { x: cx, y: cy - longHalf };
+      baseR = { x: cx - half, y: cy + half * 0.5 };
+      baseL = { x: cx + half, y: cy + half * 0.5 };
+      wingR = { x: cx - wingHalf, y: cy + longHalf };
+      wingL = { x: cx + wingHalf, y: cy + longHalf };
+    }
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(baseR.x, baseR.y);
+    ctx.lineTo(wingR.x, wingR.y);
+    ctx.lineTo(baseL.x, baseL.y);
+    ctx.lineTo(wingL.x, wingL.y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else if (shape === 'hexagon') {
+    // 六边形：前进方向略微拉长
+    const longHalf = half * 1.2;
+    const shortHalf = half * 0.85;
+    const pts = [];
+    if (dir === 'right' || dir === 'left') {
+      const sign = dir === 'right' ? 1 : -1;
+      pts.push({ x: cx + sign * longHalf, y: cy });
+      pts.push({ x: cx + sign * shortHalf, y: cy - half });
+      pts.push({ x: cx - sign * shortHalf, y: cy - half });
+      pts.push({ x: cx - sign * longHalf, y: cy });
+      pts.push({ x: cx - sign * shortHalf, y: cy + half });
+      pts.push({ x: cx + sign * shortHalf, y: cy + half });
+    } else {
+      const sign = dir === 'bottom' ? 1 : -1;
+      pts.push({ x: cx, y: cy + sign * longHalf });
+      pts.push({ x: cx + half, y: cy + sign * shortHalf });
+      pts.push({ x: cx + half, y: cy - sign * shortHalf });
+      pts.push({ x: cx, y: cy - sign * longHalf });
+      pts.push({ x: cx - half, y: cy - sign * shortHalf });
+      pts.push({ x: cx - half, y: cy + sign * shortHalf });
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fill();
+
+  } else if (shape === 'star') {
+    // 星形：五角星，前进方向的角更长
+    const outerR = half * 1.2;
+    const innerR = half * 0.5;
+    const baseAngle = { right: 0, bottom: Math.PI / 2, left: Math.PI, top: -Math.PI / 2 }[dir] || 0;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = baseAngle + (i * Math.PI) / 5;
+      const px = cx + Math.cos(angle) * r;
+      const py = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
     ctx.closePath();
     ctx.fill();
   }
