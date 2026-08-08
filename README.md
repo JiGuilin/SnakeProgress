@@ -70,7 +70,11 @@ SnakeProgress/
 ├── snake-progress-app/
 │   ├── src/                    # 前端源码
 │   │   ├── index.html          # 主窗口（蛇身渲染）
-│   │   ├── main.js             # 核心渲染引擎 + 进度计算
+│   │   ├── main.js             # 入口：状态 / 配置 / 定时器 / 事件
+│   │   ├── path.js             # 边框路径与蛇块采样
+│   │   ├── effects.js          # 颜色与头/身/尾动效
+│   │   ├── render.js           # Canvas 绘制主循环
+│   │   ├── ui.js               # Tooltip / 弹窗 / 打卡通知
 │   │   ├── settings.html       # 设置面板
 │   │   ├── settings.js         # 设置面板逻辑
 │   │   ├── sprite-generator.js # 像素素材生成器
@@ -133,6 +137,10 @@ npm run tauri build
 - **Linux**: `~/.config/SnakeProgress/config.json`
 
 ---
+
+## 📋 Changelog
+
+版本变更见 [CHANGELOG.md](./CHANGELOG.md)。
 
 ## 📜 License
 
